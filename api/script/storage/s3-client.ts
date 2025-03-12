@@ -76,7 +76,7 @@ export class CustomS3Client {
               new CreateBucketCommand({
                 Bucket: bucketName,
                 CreateBucketConfiguration: {
-                  LocationConstraint: this._region !== "us-east-1" ? this._region : undefined,
+                  LocationConstraint: 'ap-northeast-2'
                 },
               })
             );
