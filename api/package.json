@@ -22,6 +22,9 @@
   },
   "author": "Microsoft",
   "dependencies": {
+    "@aws-sdk/client-cloudfront": "^3.764.0",
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/s3-request-presigner": "^3.758.0",
     "@azure/data-tables": "^13.3.0",
     "@azure/identity": "^4.2.1",
     "@azure/keyvault-secrets": "^4.7.0",
@@ -65,7 +68,7 @@
     "@types/q": "^1.5.5",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
-    "dotenv": "^16.0.3",
+    "dotenv": "^16.4.7",
     "eslint": "^8.45.0",
     "prettier": "^2.8.8",
     "rimraf": "^5.0.1",
