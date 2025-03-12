@@ -321,11 +321,10 @@ export class AwsMongoStorage implements storage.Storage {
     deployment = storage.clone(deployment);
     deployment.id = shortid.generate();
     deployment.createdTime = new Date().getTime();
-    // deployment.appId = appId; // MongoDB 쿼리용
 
     return this.getApp(accountId, appId)
       .then(() => {
-        return this._mongoClient.addDeployment(deployment);
+        return this._mongoClient.addDeployment(appId, deployment);
       })
       .then(() => deployment.id);
   }
@@ -336,8 +335,8 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
-  public getDeploymentInfo(deploymentKey: string): q.Promise<storage.DeploymentInfo> {
-    return this._mongoClient.getDeploymentByKey(deploymentKey);
+  public getDeploymentInfo(deploymentKey: string, accountId?: string, appName?: string): q.Promise<storage.DeploymentInfo> {
+    return this._mongoClient.getDeploymentInfo(deploymentKey, accountId, appName);
   }
 
   public getDeployments(accountId: string, appId: string): q.Promise<storage.Deployment[]> {

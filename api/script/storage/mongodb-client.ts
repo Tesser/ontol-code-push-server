@@ -5,16 +5,17 @@ import { Collection, Db, MongoClient } from "mongodb";
 import * as q from "q";
 import * as storage from "./storage";
 import { StorageKeys } from "./storage-keys";
+import { Account, App, Deployment, AccessKey } from "./storage";
 
 // MongoDB 연결 및 컬렉션 관리
 export interface MongoDBConnection {
   client: MongoClient;
   db: Db;
   collections: {
-    accounts: Collection;
-    apps: Collection;
-    deployments: Collection;
-    accessKeys: Collection;
+    accounts: Collection<Account>;
+    apps: Collection<App>;
+    deployments: Collection<Deployment>;
+    accessKeys: Collection<AccessKey>;
     accessKeyPointers: Collection;
   };
 }
@@ -83,7 +84,7 @@ export class MongoDBClient {
       return q.Promise<string>((resolve, reject) => {
         this._connection.collections.accounts
           .insertOne({
-            _id: StorageKeys.getAccountId(account.id),
+            id: StorageKeys.getAccountId(account.id),
             ...account,
             email: account.email.toLowerCase(), // 이메일은 소문자로 저장
           })
@@ -104,12 +105,12 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Account>((resolve, reject) => {
         this._connection.collections.accounts
-          .findOne({ _id: StorageKeys.getAccountId(accountId) })
+          .findOne({ id: StorageKeys.getAccountId(accountId) })
           .then((account) => {
             if (!account) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
-              delete account._id; // MongoDB ID 제거
+              delete account.id; // MongoDB ID 제거
               resolve(account);
             }
           })
@@ -129,7 +130,7 @@ export class MongoDBClient {
                 storage.storageError(storage.ErrorCode.NotFound, "The specified e-mail address doesn't represent a registered user")
               );
             } else {
-              delete account._id;
+              delete account.id;
               resolve(account);
             }
           })
@@ -161,7 +162,7 @@ export class MongoDBClient {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.apps
           .insertOne({
-            _id: StorageKeys.getAppId(app.id),
+            id: StorageKeys.getAppId(app.id),
             ...app,
           })
           .then(() => resolve())
@@ -180,12 +181,12 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<storage.App>((resolve, reject) => {
         this._connection.collections.apps
-          .findOne({ _id: StorageKeys.getAppId(appId) })
+          .findOne({ id: StorageKeys.getAppId(appId) })
           .then((app) => {
             if (!app) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
-              delete app._id;
+              delete app.id;
               resolve(app);
             }
           })
@@ -203,7 +204,7 @@ export class MongoDBClient {
           })
           .toArray()
           .then((apps) => {
-            apps.forEach((app) => delete app._id);
+            apps.forEach((app) => delete app.id);
             resolve(apps);
           })
           .catch(reject);
@@ -215,7 +216,7 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.apps
-          .updateOne({ _id: StorageKeys.getAppId(appId) }, { $set: updates })
+          .updateOne({ id: StorageKeys.getAppId(appId) }, { $set: updates })
           .then((result) => {
             if (result.matchedCount === 0) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
@@ -232,7 +233,7 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.apps
-          .deleteOne({ _id: StorageKeys.getAppId(appId) })
+          .deleteOne({ id: StorageKeys.getAppId(appId) })
           .then(() => {
             // 관련 배포도 삭제
             return this._connection.collections.deployments.deleteMany({ appId });
@@ -244,12 +245,12 @@ export class MongoDBClient {
   }
 
   // 배포 관련 메서드
-  public addDeployment(deployment: storage.Deployment): q.Promise<void> {
+  public addDeployment(addId: string, deployment: storage.Deployment): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.deployments
           .insertOne({
-            _id: StorageKeys.getDeploymentId(deployment.appId, deployment.id),
+            id: StorageKeys.getDeploymentId(addId, deployment.id),
             ...deployment,
           })
           .then(() => resolve())
@@ -269,13 +270,13 @@ export class MongoDBClient {
       return q.Promise<storage.Deployment>((resolve, reject) => {
         this._connection.collections.deployments
           .findOne({
-            _id: StorageKeys.getDeploymentId(appId, deploymentId),
+            id: StorageKeys.getDeploymentId(appId, deploymentId),
           })
           .then((deployment) => {
             if (!deployment) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
-              delete deployment._id;
+              delete deployment.id;
               resolve(deployment);
             }
           })
@@ -284,23 +285,34 @@ export class MongoDBClient {
     });
   }
 
-  public getDeploymentByKey(deploymentKey: string): q.Promise<storage.DeploymentInfo> {
-    return this._setupPromise.then(() => {
-      return q.Promise<storage.DeploymentInfo>((resolve, reject) => {
-        this._connection.collections.deployments
-          .findOne({ key: deploymentKey })
-          .then((deployment) => {
-            if (!deployment) {
-              reject(storage.storageError(storage.ErrorCode.NotFound));
-            } else {
-              resolve({
-                appId: deployment.appId,
-                deploymentId: deployment.id,
-              });
-            }
-          })
-          .catch(reject);
-      });
+  public getDeploymentInfo(deploymentKey: string, accountId?:string, appName?:string): q.Promise<storage.DeploymentInfo> {
+    const query: any = {};
+
+    if (appName) {
+      query.name = appName;
+    }
+
+    if (accountId) {
+      query[`collaborators.${accountId}`] = { $exists: true };
+    }
+
+    return q.Promise<storage.DeploymentInfo>((resolve, reject) => {
+      this._connection.collections.apps.findOne(query)
+        .then(findByAccountIdAndName => {
+          return this._connection.collections.deployments
+            .findOne({ key: deploymentKey })
+            .then((deployment) => {
+              if (!deployment) {
+                reject(storage.storageError(storage.ErrorCode.NotFound));
+              } else {
+                resolve({
+                  appId: findByAccountIdAndName.id,
+                  deploymentId: deployment.id,
+                });
+              }
+            });
+        })
+        .catch(reject);
     });
   }
 
@@ -311,7 +323,7 @@ export class MongoDBClient {
           .find({ appId })
           .toArray()
           .then((deployments) => {
-            deployments.forEach((deployment) => delete deployment._id);
+            deployments.forEach((deployment) => delete deployment.id);
             resolve(deployments);
           })
           .catch(reject);
@@ -323,7 +335,7 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.deployments
-          .updateOne({ _id: StorageKeys.getDeploymentId(appId, deploymentId) }, { $set: updates })
+          .updateOne({ id: StorageKeys.getDeploymentId(appId, deploymentId) }, { $set: updates })
           .then((result) => {
             if (result.matchedCount === 0) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
@@ -341,7 +353,7 @@ export class MongoDBClient {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.deployments
           .deleteOne({
-            _id: StorageKeys.getDeploymentId(appId, deploymentId),
+            id: StorageKeys.getDeploymentId(appId, deploymentId),
           })
           .then(() => resolve())
           .catch(reject);
@@ -356,14 +368,14 @@ export class MongoDBClient {
         // 액세스 키 저장
         this._connection.collections.accessKeys
           .insertOne({
-            _id: StorageKeys.getAccessKeyId(accountId, accessKey.id),
+            id: StorageKeys.getAccessKeyId(accountId, accessKey.id),
             ...accessKey,
-            accountId,
+            createdBy: accountId,
           })
           .then(() => {
             // 액세스 키 포인터 저장 (이름으로 조회 가능하도록)
             return this._connection.collections.accessKeyPointers.insertOne({
-              _id: StorageKeys.getAccessKeyPointerId(accessKey.name),
+              id: StorageKeys.getAccessKeyPointerId(accessKey.name),
               accountId,
               expires: accessKey.expires,
             });
@@ -385,14 +397,14 @@ export class MongoDBClient {
       return q.Promise<storage.AccessKey>((resolve, reject) => {
         this._connection.collections.accessKeys
           .findOne({
-            _id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
+            id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
           })
           .then((accessKey) => {
             if (!accessKey) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
-              delete accessKey._id;
-              delete accessKey.accountId;
+              delete accessKey.id;
+              delete accessKey.createdBy;
               resolve(accessKey);
             }
           })
@@ -409,8 +421,8 @@ export class MongoDBClient {
           .toArray()
           .then((accessKeys) => {
             accessKeys.forEach((key) => {
-              delete key._id;
-              delete key.accountId;
+              delete key.id;
+              delete key.createdBy;
             });
             resolve(accessKeys);
           })
@@ -424,7 +436,7 @@ export class MongoDBClient {
       return q.Promise<string>((resolve, reject) => {
         this._connection.collections.accessKeyPointers
           .findOne({
-            _id: StorageKeys.getAccessKeyPointerId(accessKeyName),
+            id: StorageKeys.getAccessKeyPointerId(accessKeyName),
           })
           .then((pointer) => {
             if (!pointer) {
@@ -444,14 +456,14 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.accessKeys
-          .updateOne({ _id: StorageKeys.getAccessKeyId(accountId, accessKeyId) }, { $set: updates })
+          .updateOne({ id: StorageKeys.getAccessKeyId(accountId, accessKeyId) }, { $set: updates })
           .then((result) => {
             if (result.matchedCount === 0) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else if (updates.expires) {
               // 만료 시간이 업데이트된 경우 포인터도 업데이트
               return this._connection.collections.accessKeys.findOne({
-                _id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
+                id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
               });
             } else {
               resolve();
@@ -460,7 +472,7 @@ export class MongoDBClient {
           .then((accessKey) => {
             if (accessKey) {
               return this._connection.collections.accessKeyPointers.updateOne(
-                { _id: StorageKeys.getAccessKeyPointerId(accessKey.name) },
+                { id: StorageKeys.getAccessKeyPointerId(accessKey.name) },
                 { $set: { expires: accessKey.expires } }
               );
             }
@@ -477,7 +489,7 @@ export class MongoDBClient {
         // 먼저 액세스 키 정보 가져오기
         this._connection.collections.accessKeys
           .findOne({
-            _id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
+            id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
           })
           .then((accessKey) => {
             if (!accessKey) {
@@ -486,12 +498,12 @@ export class MongoDBClient {
               // 액세스 키 삭제
               return this._connection.collections.accessKeys
                 .deleteOne({
-                  _id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
+                  id: StorageKeys.getAccessKeyId(accountId, accessKeyId),
                 })
                 .then(() => {
                   // 액세스 키 포인터 삭제
                   return this._connection.collections.accessKeyPointers.deleteOne({
-                    _id: StorageKeys.getAccessKeyPointerId(accessKey.name),
+                    id: StorageKeys.getAccessKeyPointerId(accessKey.name),
                   });
                 });
             }
