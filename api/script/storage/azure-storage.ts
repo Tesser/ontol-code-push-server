@@ -4,32 +4,47 @@
 import * as q from "q";
 import * as shortid from "shortid";
 import * as stream from "stream";
-import * as storage from "./storage";
 import * as utils from "../utils/common";
+import * as storage from "./storage";
 
-import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob";
 import {
-  TableServiceClient,
-  TableClient,
   AzureNamedKeyCredential,
-  GetTableEntityResponse,
-  TableEntity,
-  odata,
-  TransactionAction,
   CreateDeleteEntityAction,
+  GetTableEntityResponse,
+  odata,
+  TableClient,
+  TableEntity,
+  TableServiceClient,
+  TransactionAction,
 } from "@azure/data-tables";
+import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob";
 import { isPrototypePollutionKey } from "./storage";
 
+/**
+ * 애플리케이션, 계정, 배포의 키를 생성합니다.
+ * 스토리지 시스템에서 데이터를 계층적으로 관리할 수 있도록 고유한 키를 생성하는 역할을 합니다.
+ */
 module Keys {
-  // Can these symbols break us?
+  // 키를 구성할 때 값들을 구분하기 위해 사용합니다.
   const DELIMITER = " ";
+  // 키의 끝 부분을 특정 값으로 표시하여 마지막 요소(leaf node)임을 나타냅니다.
   const LEAF_MARKER = "*";
 
+  /**
+   * 계정의 파티션 키를 생성합니다.
+   * @param accountId 계정 ID
+   * @returns 계정의 파티션 키
+   */
   export function getAccountPartitionKey(accountId: string): string {
     validateParameters(Array.prototype.slice.apply(arguments));
     return "accountId" + DELIMITER + accountId;
   }
 
+  /**
+   * 특정 계정의 주소(Pointer) 객체를 반환합니다.
+   * @param accountId 계정 ID
+   * @returns 계정의 주소
+   */
   export function getAccountAddress(accountId: string): Pointer {
     validateParameters(Array.prototype.slice.apply(arguments));
     return <Pointer>{
@@ -38,21 +53,49 @@ module Keys {
     };
   }
 
+  /**
+   * 앱의 파티션 키를 생성합니다.
+   * @param appId 앱 ID
+   * @returns 앱의 파티션 키
+   */
   export function getAppPartitionKey(appId: string): string {
     validateParameters(Array.prototype.slice.apply(arguments));
     return "appId" + DELIMITER + appId;
   }
 
+  /**
+   * 애플리케이션 및 배포 정보를 포함하는 계층적 RowKey를 생성합니다.
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @returns 앱의 RowKey
+   */
   export function getHierarchicalAppRowKey(appId?: string, deploymentId?: string): string {
     validateParameters(Array.prototype.slice.apply(arguments));
     return generateHierarchicalAppKey(/*markLeaf=*/ true, appId, deploymentId);
   }
 
+  /**
+   * 계정에 대한 계층적 RowKey를 생성합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @returns 계정의 RowKey
+   */
   export function getHierarchicalAccountRowKey(accountId: string, appId?: string): string {
     validateParameters(Array.prototype.slice.apply(arguments));
     return generateHierarchicalAccountKey(/*markLeaf=*/ true, accountId, appId);
   }
 
+  /**
+   * 앱에 대한 계층적 키를 생성하고, 필요하면 리프(마지막 요소) 키를 표시합니다.
+   * @param markLeaf 마지막 요소인지 여부
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @returns 앱의 RowKey
+   *
+   * @example
+   * `markLeaf = true`이면 키의 마지막 요소 앞에 * 표시를 붙여서 최종 노드임을 명확히 표시합니다.
+   * 예를 들어, 'appId 123 deploymentId 456' -> 'appId 123 deploymentId* 456'
+   */
   export function generateHierarchicalAppKey(markLeaf: boolean, appId: string, deploymentId?: string): string {
     validateParameters(Array.prototype.slice.apply(arguments).slice(1));
     let key = delimit("appId", appId, /*prependDelimiter=*/ false);
@@ -61,7 +104,6 @@ module Keys {
       key += delimit("deploymentId", deploymentId);
     }
 
-    // Mark leaf key with a '*', e.g. 'appId 123 deploymentId 456' -> 'appId 123 deploymentId* 456'
     if (markLeaf) {
       const lastIdDelimiter: number = key.lastIndexOf(DELIMITER);
       key = key.substring(0, lastIdDelimiter) + LEAF_MARKER + key.substring(lastIdDelimiter);
@@ -70,6 +112,13 @@ module Keys {
     return key;
   }
 
+  /**
+   * 계정에 대한 계층적 키를 생성하고, 필요하면 리프(마지막 요소) 키를 표시합니다.
+   * @param markLeaf 마지막 요소인지 여부
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @returns 계정의 RowKey
+   */
   export function generateHierarchicalAccountKey(markLeaf: boolean, accountId: string, appId?: string): string {
     validateParameters(Array.prototype.slice.apply(arguments).slice(1));
     let key = delimit("accountId", accountId, /*prependDelimiter=*/ false);
@@ -78,7 +127,6 @@ module Keys {
       key += delimit("appId", appId);
     }
 
-    // Mark leaf key with a '*', e.g. 'accountId 123 appId 456' -> 'accountId 123 appId* 456'
     if (markLeaf) {
       const lastIdDelimiter: number = key.lastIndexOf(DELIMITER);
       key = key.substring(0, lastIdDelimiter) + LEAF_MARKER + key.substring(lastIdDelimiter);
@@ -87,6 +135,12 @@ module Keys {
     return key;
   }
 
+  /**
+   * 계정에 대한 액세스 키의 RowKey를 생성합니다.
+   * @param accountId 계정 ID
+   * @param accessKeyId 액세스 키 ID
+   * @returns 계정의 액세스 키의 RowKey
+   */
   export function getAccessKeyRowKey(accountId: string, accessKeyId?: string): string {
     validateParameters(Array.prototype.slice.apply(arguments));
     let key: string = "accountId_" + accountId + "_accessKeyId*_";
@@ -98,37 +152,65 @@ module Keys {
     return key;
   }
 
+  /**
+   * 배포 데이터 여부를 확인합니다.
+   * @param rowKey 행 키
+   * @returns 배포 데이터 여부
+   */
   export function isDeployment(rowKey: string): boolean {
     return rowKey.indexOf("deploymentId*") !== -1;
   }
 
-  // To prevent a table scan when querying by properties for which we don't have partition information, we create shortcut
-  // partitions which hold single entries
+  /**
+   * 이메일을 이용해 빠르게 검색할 수 있도록 단축 주소(Shortcut Address)를 생성합니다.
+   * - 이메일의 대소문자를 구분하지 않기 위해 소문자로 변환하여 키를 생성합니다.
+   * - 하지만 원래 이메일은 그대로 유지합니다.
+   * @param email 이메일 주소
+   * @returns 이메일 주소 파티션 키
+   */
   export function getEmailShortcutAddress(email: string): Pointer {
     validateParameters(Array.prototype.slice.apply(arguments));
-    // We lower-case the email in our storage lookup because Partition/RowKeys are case-sensitive, but in all other cases we leave
-    // the email as-is (as a new account with a different casing would be rejected as a duplicate at creation time)
     return <Pointer>{
       partitionKeyPointer: "email" + DELIMITER + email.toLowerCase(),
       rowKeyPointer: "",
     };
   }
 
+  /**
+   * 배포 키를 이용해 빠르게 검색할 수 있도록 단축 주소(Shortcut Address)를 생성합니다.
+   * @param deploymentKey 배포 키
+   * @returns 배포 키 파티션 키
+   */
   export function getShortcutDeploymentKeyPartitionKey(deploymentKey: string): string {
     validateParameters(Array.prototype.slice.apply(arguments));
     return delimit("deploymentKey", deploymentKey, /*prependDelimiter=*/ false);
   }
 
+  /**
+   * 배포 키 단축 RowKey를 생성합니다.
+   * RowKey가 필요 없는 경우 사용됩니다.
+   * @returns 빈 문자열
+   */
   export function getShortcutDeploymentKeyRowKey(): string {
     return "";
   }
 
+  /**
+   * 액세스 키(Access Key)를 기반으로 단축 파티션 키를 생성합니다.
+   * @param accessKeyName 액세스 키 이름
+   * @param hash 해시 여부 (보안 강화를 위해 SHA-256 해시 함수를 적용할 수도 있습니다.)
+   * @returns 액세스 키 파티션 키
+   */
   export function getShortcutAccessKeyPartitionKey(accessKeyName: string, hash: boolean = true): string {
     validateParameters(Array.prototype.slice.apply(arguments));
     return delimit("accessKey", hash ? utils.hashWithSHA256(accessKeyName) : accessKeyName, /*prependDelimiter=*/ false);
   }
 
-  // Last layer of defense against uncaught injection attacks - raise an uncaught exception
+  /**
+   * - Azure Table Storage에서 사용되는 파라미터들의 유효성을 검사합니다.
+   * - 파라미터에 DELIMITER나 LEAF_MARKER와 같은 특수 문자가 포함되어 있는 경우 예외를 발생시킵니다.
+   * @param parameters 파라미터들
+   */
   function validateParameters(parameters: string[]): void {
     parameters.forEach((parameter: string): void => {
       if (parameter && (parameter.indexOf(DELIMITER) >= 0 || parameter.indexOf(LEAF_MARKER) >= 0)) {
@@ -137,12 +219,23 @@ module Keys {
     });
   }
 
+  /**
+   * - 필드 이름과 값을 구분자(delimiter)를 사용하여 하나의 문자열로 결합합니다.
+   * - 계층적 키를 생성할 때 필드 이름과 값을 일관된 형식으로 결합하기 위해 사용됩니다.
+   * @param fieldName 필드 이름
+   * @param value 필드 값
+   * @param prependDelimiter 구분자 접두사 여부
+   * @returns 파티션 키 또는 RowKey
+   */
   function delimit(fieldName: string, value: string, prependDelimiter = true): string {
     const prefix = prependDelimiter ? DELIMITER : "";
     return prefix + fieldName + DELIMITER + value;
   }
 }
 
+/**
+ * Azure Table Storage에서 데이터 항목(엔티티)의 위치를 가리키는 참조 객체
+ */
 interface Pointer {
   partitionKeyPointer: string;
   rowKeyPointer: string;
@@ -158,6 +251,9 @@ interface AccessKeyPointer {
   expires: number;
 }
 
+/**
+ * Azure Storage 서비스와 상호작용하기 위한 구체적인 구현을 제공합니다.
+ */
 export class AzureStorage implements storage.Storage {
   public static NO_ID_ERROR = "No id set";
 
@@ -341,6 +437,7 @@ export class AzureStorage implements storage.Storage {
       .catch(AzureStorage.azureErrorHandler);
   }
 
+  // eslint-disable-next-line no-unused-vars
   public getApp(accountId: string, appId: string, keepCollaboratorIds: boolean = false): q.Promise<storage.App> {
     return this._setupPromise
       .then(() => {
@@ -691,6 +788,7 @@ export class AzureStorage implements storage.Storage {
       .catch(AzureStorage.azureErrorHandler);
   }
 
+  // eslint-disable-next-line no-unused-vars
   public addBlob(blobId: string, stream: stream.Readable, streamLength: number): q.Promise<string> {
     return this._setupPromise
       .then(() => {
@@ -916,7 +1014,7 @@ export class AzureStorage implements storage.Storage {
         this._blobService = blobServiceClient;
       })
       .catch((error) => {
-        if (error.code == "ContainerAlreadyExists") {
+        if (error.code === "ContainerAlreadyExists") {
           this._tableClient = tableClient;
           this._blobService = blobServiceClient;
         } else {
@@ -1010,7 +1108,7 @@ export class AzureStorage implements storage.Storage {
   }
 
   private unwrap(entity: any, includeKey?: boolean): any {
-    const { partitionKey, rowKey, etag, timestamp, createdTime, ...rest } = entity;
+    const { partitionKey, rowKey, createdTime, ...rest } = entity;
 
     let unwrapped = includeKey ? { partitionKey, rowKey, ...rest } : rest;
 
@@ -1082,7 +1180,7 @@ export class AzureStorage implements storage.Storage {
     return this.getApp(accountId, appId, /*keepCollaboratorIds*/ true)
       .then((app: storage.App) => {
         const collaboratorMap: storage.CollaboratorMap = app.collaborators;
-        const requesterEmail: string = AzureStorage.getEmailForAccountId(collaboratorMap, accountId);
+        // const requesterEmail: string = AzureStorage.getEmailForAccountId(collaboratorMap, accountId);
 
         const removalPromises: q.Promise<void>[] = [];
 
@@ -1093,7 +1191,7 @@ export class AzureStorage implements storage.Storage {
 
         return q.allSettled(removalPromises);
       })
-      .then(() => { });
+      .then(() => {});
   }
 
   private updateAppWithPermission(accountId: string, app: storage.App, updateCollaborator: boolean = false): q.Promise<void> {
@@ -1175,8 +1273,9 @@ export class AzureStorage implements storage.Storage {
       queryOptions: { filter: query },
     })) {
       if (entity.partitionKeyPointer && entity.partitionKeyPointer !== "" && entity.rowKeyPointer && entity.rowKeyPointer !== "") {
-        const childQuery = odata`PartitionKey eq ${entity.partitionKeyPointer} and (RowKey eq ${entity.rowKeyPointer
-          } or (RowKey gt ${childrenSearchKey} and RowKey lt ${childrenSearchKey + "~"}))`;
+        const childQuery = odata`PartitionKey eq ${entity.partitionKeyPointer} and (RowKey eq ${
+          entity.rowKeyPointer
+        } or (RowKey gt ${childrenSearchKey} and RowKey lt ${childrenSearchKey + "~"}))`;
 
         promises.push(this.getLeafEntities(childQuery, childrenSearchKey));
       } else {
@@ -1220,8 +1319,9 @@ export class AzureStorage implements storage.Storage {
     }
 
     // Fetch both the parent (for error-checking purposes) and the direct children
-    const query = odata`PartitionKey eq ${partitionKey} and (RowKey eq ${rowKey} or (RowKey gt ${childrenSearchKey} and RowKey lt ${childrenSearchKey + "~"
-      }))`;
+    const query = odata`PartitionKey eq ${partitionKey} and (RowKey eq ${rowKey} or (RowKey gt ${childrenSearchKey} and RowKey lt ${
+      childrenSearchKey + "~"
+    }))`;
 
     const entities: TableEntity[] = await this.getLeafEntities(query, childrenSearchKey);
 

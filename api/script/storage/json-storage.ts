@@ -8,10 +8,10 @@ import * as q from "q";
 import * as stream from "stream";
 
 import * as storage from "./storage";
+import { isPrototypePollutionKey } from "./storage";
 
 import clone = storage.clone;
 import Promise = q.Promise;
-import { isPrototypePollutionKey } from "./storage";
 
 function merge(original: any, updates: any): void {
   for (const property in updates) {
