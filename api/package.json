@@ -36,6 +36,7 @@
     "express": "^4.21.2",
     "express-domain-middleware": "0.1.0",
     "express-rate-limit": "^7.4.0",
+    "mongodb": "^6.14.2",
     "multer": "^1.4.5-lts.1",
     "node-deepcopy": "0.1.1",
     "passport": "^0.6.0",
