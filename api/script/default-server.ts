@@ -1,20 +1,21 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as api from "./api";
-import { AzureStorage } from "./storage/azure-storage";
-import { fileUploadMiddleware } from "./file-upload-manager";
-import { JsonStorage } from "./storage/json-storage";
-import { RedisManager } from "./redis-manager";
-import { Storage } from "./storage/storage";
 import { Response } from "express";
+import * as api from "./api";
+import { fileUploadMiddleware } from "./file-upload-manager";
+import { RedisManager } from "./redis-manager";
+import { AzureStorage } from "./storage/azure-storage";
+import { JsonStorage } from "./storage/json-storage";
+import { Storage } from "./storage/storage";
 const { DefaultAzureCredential } = require("@azure/identity");
 const { SecretClient } = require("@azure/keyvault-secrets");
 
 import * as bodyParser from "body-parser";
-const domain = require("express-domain-middleware");
 import * as express from "express";
 import * as q from "q";
+import { AwsMongoStorage } from "./storage/aws-mongo-storage";
+const domain = require("express-domain-middleware");
 
 interface Secret {
   id: string;
@@ -41,7 +42,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
 
   q<void>(null)
     .then(async () => {
-      if (useJsonStorage) {
+      if(process.env.MONGODB_URI){
+        storage = new AwsMongoStorage();
+      } else if (useJsonStorage) {
         storage = new JsonStorage();
       } else if (!process.env.AZURE_KEYVAULT_ACCOUNT) {
         storage = new AzureStorage();
@@ -171,10 +174,10 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
           keyvaultClient
             .getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`)
             .then((secret: any) => {
-              return (<AzureStorage>storage).reinitialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
+              return (<AzureStorage>storage).initialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
             })
             .catch((error: Error) => {
-              console.error("Failed to reinitialize storage from Key Vault credentials");
+              console.error("Failed to initialize storage from Key Vault credentials");
               appInsights.errorHandler(error);
             })
             .done();

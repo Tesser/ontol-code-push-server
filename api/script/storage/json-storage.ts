@@ -8,14 +8,21 @@ import * as q from "q";
 import * as stream from "stream";
 
 import * as storage from "./storage";
+import { isPrototypePollutionKey } from "./storage";
 
 import clone = storage.clone;
 import Promise = q.Promise;
-import { isPrototypePollutionKey } from "./storage";
 
-function merge(original: any, updates: any): void {
+/**
+ * 원본 객체에 업데이트 객체의 속성을 병합합니다.
+ * @param original - 원본 객체
+ * @param updates - 업데이트 객체
+ */
+function merge<T extends Record<string, any>>(original: T, updates: Partial<T>): void {
   for (const property in updates) {
-    original[property] = updates[property];
+    if (updates.hasOwnProperty(property)) {
+      original[property] = updates[property];
+    }
   }
 }
 

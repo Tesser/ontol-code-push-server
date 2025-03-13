@@ -1,33 +1,33 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { createTempFileFromBuffer, getFileWithField } from "../file-upload-manager";
-import { getIpAddress } from "../utils/rest-headers";
-import { isUnfinishedRollout } from "../utils/rollout-selector";
-import * as packageDiffing from "../utils/package-diffing";
-import * as converterUtils from "../utils/converter";
-import * as diffErrorUtils from "../utils/diff-error-handling";
-import * as error from "../error";
-import * as errorUtils from "../utils/rest-error-handling";
 import { Request, Response, Router } from "express";
+import rateLimit from "express-rate-limit";
 import * as fs from "fs";
-import * as hashUtils from "../utils/hash-utils";
 import * as q from "q";
-import * as redis from "../redis-manager";
-import * as restTypes from "../types/rest-definitions";
-import * as security from "../utils/security";
 import * as semver from "semver";
 import * as stream from "stream";
 import * as streamifier from "streamifier";
+import * as error from "../error";
+import { createTempFileFromBuffer, getFileWithField } from "../file-upload-manager";
+import * as redis from "../redis-manager";
 import * as storageTypes from "../storage/storage";
+import { isPrototypePollutionKey } from "../storage/storage";
+import * as restTypes from "../types/rest-definitions";
+import * as converterUtils from "../utils/converter";
+import * as diffErrorUtils from "../utils/diff-error-handling";
+import * as hashUtils from "../utils/hash-utils";
+import * as packageDiffing from "../utils/package-diffing";
+import * as errorUtils from "../utils/rest-error-handling";
+import { getIpAddress } from "../utils/rest-headers";
+import { isUnfinishedRollout } from "../utils/rollout-selector";
+import * as security from "../utils/security";
 import * as validationUtils from "../utils/validation";
 import PackageDiffer = packageDiffing.PackageDiffer;
 import NameResolver = storageTypes.NameResolver;
 import PackageManifest = hashUtils.PackageManifest;
 import Promise = q.Promise;
 import tryJSON = require("try-json");
-import rateLimit from "express-rate-limit";
-import { isPrototypePollutionKey } from "../storage/storage";
 
 const DEFAULT_ACCESS_KEY_EXPIRY = 1000 * 60 * 60 * 24 * 60; // 60 days
 const ACCESS_KEY_MASKING_STRING = "(hidden)";
@@ -270,7 +270,6 @@ export function getManagementRouter(config: ManagementConfig): Router {
   router.post("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appRequest: restTypes.AppCreationRequest = converterUtils.appCreationRequestFromBody(req.body);
-
     const validationErrors = validationUtils.validateApp(appRequest, /*isUpdate=*/ false);
     if (validationErrors.length) {
       errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
@@ -760,141 +759,145 @@ export function getManagementRouter(config: ManagementConfig): Router {
     max: 100, // limit each IP to 100 requests per windowMs
   });
 
-  router.post("/apps/:appName/deployments/:deploymentName/release", releaseRateLimiter, (req: Request, res: Response, next: (err?: any) => void): any => {
-    const accountId: string = req.user.id;
-    const appName: string = req.params.appName;
-    const deploymentName: string = req.params.deploymentName;
-    const file: any = getFileWithField(req, "package");
+  router.post(
+    "/apps/:appName/deployments/:deploymentName/release",
+    releaseRateLimiter,
+    (req: Request, res: Response, next: (err?: any) => void): any => {
+      const accountId: string = req.user.id;
+      const appName: string = req.params.appName;
+      const deploymentName: string = req.params.deploymentName;
+      const file: any = getFileWithField(req, "package");
 
-    if (!file || !file.buffer) {
-      errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
-      return;
-    }
-
-    const filePath: string = createTempFileFromBuffer(file.buffer);
-    const restPackage: restTypes.Package = tryJSON(req.body.packageInfo) || {};
-    const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(
-      restPackage,
-      /*allOptional*/ false
-    );
-    if (validationErrors.length) {
-      errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
-      return;
-    }
-
-    fs.stat(filePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
-      if (err) {
-        errorUtils.sendUnknownError(res, err, next);
+      if (!file || !file.buffer) {
+        errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
         return;
       }
 
-      // These variables are for hoisting promise results and flattening the following promise chain.
-      let appId: string;
-      let deploymentToReleaseTo: storageTypes.Deployment;
-      let storagePackage: storageTypes.Package;
-      let lastPackageHashWithSameAppVersion: string;
-      let newManifest: PackageManifest;
+      const filePath: string = createTempFileFromBuffer(file.buffer);
+      const restPackage: restTypes.Package = tryJSON(req.body.packageInfo) || {};
+      const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(
+        restPackage,
+        /*allOptional*/ false
+      );
+      if (validationErrors.length) {
+        errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
+        return;
+      }
 
-      nameResolver
-        .resolveApp(accountId, appName)
-        .then((app: storageTypes.App) => {
-          appId = app.id;
-          throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
-          return nameResolver.resolveDeployment(accountId, appId, deploymentName);
-        })
-        .then((deployment: storageTypes.Deployment) => {
-          deploymentToReleaseTo = deployment;
-          const existingPackage: storageTypes.Package = deployment.package;
-          if (existingPackage && isUnfinishedRollout(existingPackage.rollout) && !existingPackage.isDisabled) {
-            throw errorUtils.restError(
-              errorUtils.ErrorCode.Conflict,
-              "Please update the previous release to 100% rollout before releasing a new package."
-            );
-          }
+      fs.stat(filePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
+        if (err) {
+          errorUtils.sendUnknownError(res, err, next);
+          return;
+        }
 
-          return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.id);
-        })
-        .then((history: storageTypes.Package[]) => {
-          lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(history, restPackage.appVersion);
-          return hashUtils.generatePackageManifestFromZip(filePath);
-        })
-        .then((manifest?: PackageManifest) => {
-          if (manifest) {
-            newManifest = manifest;
-            // If update is a zip, generate a packageHash using the manifest, since
-            // that more accurately represents the contents of each file in the zip.
-            return newManifest.computePackageHash();
-          } else {
-            // Update is not a zip (flat file), generate the packageHash over the
-            // entire file contents.
-            return hashUtils.hashFile(filePath);
-          }
-        })
-        .then((packageHash: string) => {
-          restPackage.packageHash = packageHash;
-          if (restPackage.packageHash === lastPackageHashWithSameAppVersion) {
-            throw errorUtils.restError(
-              errorUtils.ErrorCode.Conflict,
-              "The uploaded package was not released because it is identical to the contents of the specified deployment's current release."
-            );
-          }
+        // These variables are for hoisting promise results and flattening the following promise chain.
+        let appId: string;
+        let deploymentToReleaseTo: storageTypes.Deployment;
+        let storagePackage: storageTypes.Package;
+        let lastPackageHashWithSameAppVersion: string;
+        let newManifest: PackageManifest;
 
-          return storage.addBlob(security.generateSecureKey(accountId), fs.createReadStream(filePath), stats.size);
-        })
-        .then((blobId: string) => storage.getBlobUrl(blobId))
-        .then((blobUrl: string) => {
-          restPackage.blobUrl = blobUrl;
-          restPackage.size = stats.size;
-
-          // If newManifest is null/undefined, then the package is not a valid ZIP file.
-          if (newManifest) {
-            const json: string = newManifest.serialize();
-            const readStream: stream.Readable = streamifier.createReadStream(json);
-
-            return storage.addBlob(security.generateSecureKey(accountId), readStream, json.length);
-          }
-
-          return q(<string>null);
-        })
-        .then((blobId?: string) => {
-          if (blobId) {
-            return storage.getBlobUrl(blobId);
-          }
-
-          return q(<string>null);
-        })
-        .then((manifestBlobUrl?: string) => {
-          storagePackage = converterUtils.toStoragePackage(restPackage);
-          if (manifestBlobUrl) {
-            storagePackage.manifestBlobUrl = manifestBlobUrl;
-          }
-
-          storagePackage.releaseMethod = storageTypes.ReleaseMethod.Upload;
-          storagePackage.uploadTime = new Date().getTime();
-          return storage.commitPackage(accountId, appId, deploymentToReleaseTo.id, storagePackage);
-        })
-        .then((committedPackage: storageTypes.Package): Promise<void> => {
-          storagePackage.label = committedPackage.label;
-          const restPackage: restTypes.Package = converterUtils.toRestPackage(committedPackage);
-
-          res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
-          res.status(201).send({ package: restPackage }); // Send response without blocking on cleanup
-
-          return invalidateCachedPackage(deploymentToReleaseTo.key);
-        })
-        .then(() => processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage))
-        .finally((): void => {
-          // Cleanup; any errors before this point will still pass to the catch() block
-          fs.unlink(filePath, (err: NodeJS.ErrnoException): void => {
-            if (err) {
-              errorUtils.sendUnknownError(res, err, next);
+        nameResolver
+          .resolveApp(accountId, appName)
+          .then((app: storageTypes.App) => {
+            appId = app.id;
+            throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
+            return nameResolver.resolveDeployment(accountId, appId, deploymentName);
+          })
+          .then((deployment: storageTypes.Deployment) => {
+            deploymentToReleaseTo = deployment;
+            const existingPackage: storageTypes.Package = deployment.package;
+            if (existingPackage && isUnfinishedRollout(existingPackage.rollout) && !existingPackage.isDisabled) {
+              throw errorUtils.restError(
+                errorUtils.ErrorCode.Conflict,
+                "Please update the previous release to 100% rollout before releasing a new package."
+              );
             }
-          });
-        })
-        .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
-        .done();
-    });
-  });
+
+            return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.id);
+          })
+          .then((history: storageTypes.Package[]) => {
+            lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(history, restPackage.appVersion);
+            return hashUtils.generatePackageManifestFromZip(filePath);
+          })
+          .then((manifest?: PackageManifest) => {
+            if (manifest) {
+              newManifest = manifest;
+              // If update is a zip, generate a packageHash using the manifest, since
+              // that more accurately represents the contents of each file in the zip.
+              return newManifest.computePackageHash();
+            } else {
+              // Update is not a zip (flat file), generate the packageHash over the
+              // entire file contents.
+              return hashUtils.hashFile(filePath);
+            }
+          })
+          .then((packageHash: string) => {
+            restPackage.packageHash = packageHash;
+            if (restPackage.packageHash === lastPackageHashWithSameAppVersion) {
+              throw errorUtils.restError(
+                errorUtils.ErrorCode.Conflict,
+                "The uploaded package was not released because it is identical to the contents of the specified deployment's current release."
+              );
+            }
+
+            return storage.addBlob(security.generateSecureKey(accountId), fs.createReadStream(filePath), stats.size);
+          })
+          .then((blobId: string) => storage.getBlobUrl(blobId))
+          .then((blobUrl: string) => {
+            restPackage.blobUrl = blobUrl;
+            restPackage.size = stats.size;
+
+            // If newManifest is null/undefined, then the package is not a valid ZIP file.
+            if (newManifest) {
+              const json: string = newManifest.serialize();
+              const readStream: stream.Readable = streamifier.createReadStream(json);
+
+              return storage.addBlob(security.generateSecureKey(accountId), readStream, json.length);
+            }
+
+            return q(<string>null);
+          })
+          .then((blobId?: string) => {
+            if (blobId) {
+              return storage.getBlobUrl(blobId);
+            }
+
+            return q(<string>null);
+          })
+          .then((manifestBlobUrl?: string) => {
+            storagePackage = converterUtils.toStoragePackage(restPackage);
+            if (manifestBlobUrl) {
+              storagePackage.manifestBlobUrl = manifestBlobUrl;
+            }
+
+            storagePackage.releaseMethod = storageTypes.ReleaseMethod.Upload;
+            storagePackage.uploadTime = new Date().getTime();
+            return storage.commitPackage(accountId, appId, deploymentToReleaseTo.id, storagePackage);
+          })
+          .then((committedPackage: storageTypes.Package): Promise<void> => {
+            storagePackage.label = committedPackage.label;
+            const restPackage: restTypes.Package = converterUtils.toRestPackage(committedPackage);
+
+            res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
+            res.status(201).send({ package: restPackage }); // Send response without blocking on cleanup
+
+            return invalidateCachedPackage(deploymentToReleaseTo.key);
+          })
+          .then(() => processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage))
+          .finally((): void => {
+            // Cleanup; any errors before this point will still pass to the catch() block
+            fs.unlink(filePath, (err: NodeJS.ErrnoException): void => {
+              if (err) {
+                errorUtils.sendUnknownError(res, err, next);
+              }
+            });
+          })
+          .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
+          .done();
+      });
+    }
+  );
 
   router.delete(
     "/apps/:appName/deployments/:deploymentName/history",

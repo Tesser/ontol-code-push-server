@@ -1,14 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { Router, RequestHandler } from "express";
+import { RequestHandler, Router } from "express";
 
-import { getHeadersMiddleware, HeadersConfig } from "./routes/headers";
-import { getAcquisitionRouter, getHealthRouter, AcquisitionConfig } from "./routes/acquisition";
-import { getManagementRouter, ManagementConfig } from "./routes/management";
-import { PassportAuthentication, AuthenticationConfig } from "./routes/passport-authentication";
+import { AcquisitionConfig, getAcquisitionRouter, getHealthRouter } from "./routes/acquisition";
 import { AppInsights } from "./routes/app-insights";
+import { getHeadersMiddleware, HeadersConfig } from "./routes/headers";
 import { InputSanitizer } from "./routes/input-sanitizer";
+import { getManagementRouter, ManagementConfig } from "./routes/management";
+import { AuthenticationConfig, PassportAuthentication } from "./routes/passport-authentication";
 import { RequestTimeoutHandler } from "./routes/request-timeout";
 
 export function headers(config: HeadersConfig): RequestHandler {
