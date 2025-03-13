@@ -948,11 +948,18 @@ export class AzureStorage implements storage.Storage {
     return q(<void>null);
   }
 
+  /**
+   * Azure Storage 서비스(테이블 및 Blob 스토리지)를 초기화합니다.
+   * @param accountName 계정 이름
+   * @param accountKey 계정 키
+   * @returns 설정 완료 프로미스
+   */
   private setup(accountName?: string, accountKey?: string): q.Promise<void> {
     let tableServiceClient: TableServiceClient;
     let tableClient: TableClient;
     let blobServiceClient: BlobServiceClient;
 
+    // 로컬 개발 환경에서는 로컬 에뮬레이터(azurite)를 사용합니다.
     if (process.env.EMULATED) {
       const devConnectionString = "UseDevelopmentStorage=true";
 
@@ -992,6 +999,7 @@ export class AzureStorage implements storage.Storage {
 
     const tableHealthEntity: any = this.wrap({ health: "health" }, /*partitionKey=*/ "health", /*rowKey=*/ "health");
 
+    // 테이블 및 Blob 스토리지(일반 데이터용, 히스토리 데이터용)를 생성합니다.
     return q
       .all([
         tableServiceClient.createTable(AzureStorage.TABLE_NAME),
@@ -1008,8 +1016,7 @@ export class AzureStorage implements storage.Storage {
         ]);
       })
       .then(() => {
-        // Do not assign these unless everything completes successfully, as this will cause in-flight promise chains to start using
-        // the initialized services
+        // 모든 작업이 성공적으로 완료된 후에만 값을 할당해야 합니다. 그렇지 않으면 진행 중인 Promise 체인이 초기화된 서비스를 사용하게 될 수 있습니다.
         this._tableClient = tableClient;
         this._blobService = blobServiceClient;
       })

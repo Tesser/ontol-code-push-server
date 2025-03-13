@@ -29,6 +29,14 @@ export class AwsMongoStorage implements storage.Storage {
     this._setupPromise = q.all([this._mongoClient.getSetupPromise(), this._s3Client.getSetupPromise()]).then(() => null);
   }
 
+  /**
+   * AwsMongoStorage를 다시 초기화합니다.
+   * @param mongoUrl MongoDB 연결 문자열
+   * @param awsRegion AWS 리전
+   * @param awsAccessKeyId AWS 액세스 키 ID
+   * @param awsSecretAccessKey AWS 비밀 액세스 키
+   * @returns 초기화 재설정 완료 Promise
+   */
   public reinitialize(mongoUrl?: string, awsRegion?: string, awsAccessKeyId?: string, awsSecretAccessKey?: string): q.Promise<void> {
     console.log("Re-initializing AWS/MongoDB storage");
 
@@ -53,7 +61,11 @@ export class AwsMongoStorage implements storage.Storage {
       .then(() => null);
   }
 
-  // Storage 인터페이스 구현 - 계정 관련 메서드
+  /**
+   * 계정을 MongoDB에 추가합니다.
+   * @param account 계정 객체
+   * @returns 계정 ID
+   */
   public addAccount(account: storage.Account): q.Promise<string> {
     account = storage.clone(account); // 값 복사
     account.id = shortid.generate();
@@ -62,23 +74,48 @@ export class AwsMongoStorage implements storage.Storage {
     return this._mongoClient.addAccount(account);
   }
 
+  /**
+   * 계정을 MongoDB에서 가져옵니다.
+   * @param accountId 계정 ID
+   * @returns 계정 객체
+   */
   public getAccount(accountId: string): q.Promise<storage.Account> {
     return this._mongoClient.getAccount(accountId);
   }
 
+  /**
+   * MongoDB에서 이메일로 계정을 조회하여 가져옵니다.
+   * @param email 이메일
+   * @returns 계정 객체
+   */
   public getAccountByEmail(email: string): q.Promise<storage.Account> {
     return this._mongoClient.getAccountByEmail(email);
   }
 
+  /**
+   * MongoDB에서 액세스 키로 계정 ID를 조회하여 가져옵니다.
+   * @param accessKey 액세스 키
+   * @returns 계정 ID
+   */
   public getAccountIdFromAccessKey(accessKey: string): q.Promise<string> {
     return this._mongoClient.getAccountIdFromAccessKey(accessKey);
   }
 
+  /**
+   * MongoDB에서 이메일로 계정을 업데이트합니다.
+   * @param email 이메일
+   * @param updates 업데이트 객체
+   */
   public updateAccount(email: string, updates: storage.Account): q.Promise<void> {
     return this._mongoClient.updateAccount(email, updates);
   }
 
-  // Storage 인터페이스 구현 - 앱 관련 메서드
+  /**
+   * 앱을 MongoDB에 추가합니다.
+   * @param accountId 계정 ID
+   * @param app 앱 객체
+   * @returns 앱 객체
+   */
   public addApp(accountId: string, app: storage.App): q.Promise<storage.App> {
     app = storage.clone(app);
     app.id = shortid.generate();
@@ -104,10 +141,21 @@ export class AwsMongoStorage implements storage.Storage {
       .then(() => app);
   }
 
+  /**
+   * MongoDB에서 계정의 모든 앱을 가져옵니다.
+   * @param accountId 계정 ID
+   * @returns 앱 배열
+   */
   public getApps(accountId: string): q.Promise<storage.App[]> {
     return this._mongoClient.getApps(accountId);
   }
 
+  /**
+   * MongoDB에서 특정 앱을 가져옵니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @returns 앱 객체
+   */
   public getApp(accountId: string, appId: string): q.Promise<storage.App> {
     return this._mongoClient.getApp(appId).then((app) => {
       // 현재 사용자 표시
@@ -122,6 +170,11 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
+  /**
+   * MongoDB에서 앱을 삭제합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   */
   public removeApp(accountId: string, appId: string): q.Promise<void> {
     return this.getApp(accountId, appId).then((app) => {
       // 소유자 확인
@@ -141,6 +194,12 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
+  /**
+   * MongoDB에서 앱을 이전합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param email 이메일
+   */
   public transferApp(accountId: string, appId: string, email: string): q.Promise<void> {
     return q.Promise<void>((resolve, reject) => {
       let app: storage.App;
@@ -196,6 +255,11 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
+  /**
+   * MongoDB에서 앱을 업데이트합니다.
+   * @param accountId 계정 ID
+   * @param app 앱 객체
+   */
   public updateApp(accountId: string, app: storage.App): q.Promise<void> {
     if (!app.id) {
       return q.reject<void>(new Error("No app id"));
@@ -222,7 +286,12 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
-  // 협업자 관련 메서드
+  /**
+   * MongoDB에서 협업자를 추가합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param email 이메일
+   */
   public addCollaborator(accountId: string, appId: string, email: string): q.Promise<void> {
     return q.Promise<void>((resolve, reject) => {
       let app: storage.App;
@@ -272,10 +341,22 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
+  /**
+   * MongoDB에서 협업자를 가져옵니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @returns 협업자 맵
+   */
   public getCollaborators(accountId: string, appId: string): q.Promise<storage.CollaboratorMap> {
     return this.getApp(accountId, appId).then((app) => app.collaborators || {});
   }
 
+  /**
+   * MongoDB에서 협업자를 제거합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param email 이메일
+   */
   public removeCollaborator(accountId: string, appId: string, email: string): q.Promise<void> {
     return q.Promise<void>((resolve, reject) => {
       this.getApp(accountId, appId)
@@ -316,7 +397,13 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
-  // 배포 관련 메서드
+  /**
+   * 배포를 추가합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deployment 배포 객체
+   * @returns 배포 ID
+   */
   public addDeployment(accountId: string, appId: string, deployment: storage.Deployment): q.Promise<string> {
     deployment = storage.clone(deployment);
     deployment.id = shortid.generate();
@@ -329,28 +416,65 @@ export class AwsMongoStorage implements storage.Storage {
       .then(() => deployment.id);
   }
 
+  /**
+   * 배포 데이터를 가져옵니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @returns 배포 정보
+   */
   public getDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Deployment> {
     return this.getApp(accountId, appId).then(() => {
       return this._mongoClient.getDeployment(appId, deploymentId);
     });
   }
 
+  /**
+   * 배포 정보를 가져옵니다.
+   * @where MongoDB
+   * @param deploymentKey 배포 키
+   * @param accountId 계정 ID
+   * @param appName 앱 이름
+   * @returns 배포 정보
+   */
   public getDeploymentInfo(deploymentKey: string, accountId?: string, appName?: string): q.Promise<storage.DeploymentInfo> {
     return this._mongoClient.getDeploymentInfo(deploymentKey, accountId, appName);
   }
 
+  /**
+   * 배포 목록을 가져옵니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @returns 배포 배열
+   */
   public getDeployments(accountId: string, appId: string): q.Promise<storage.Deployment[]> {
     return this.getApp(accountId, appId).then(() => {
       return this._mongoClient.getDeployments(appId);
     });
   }
 
+  /**
+   * 배포를 제거합니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   */
   public removeDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
     return this.getApp(accountId, appId).then(() => {
       return this._mongoClient.removeDeployment(appId, deploymentId);
     });
   }
 
+  /**
+   * 배포 정보를 업데이트합니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deployment 배포 객체
+   */
   public updateDeployment(accountId: string, appId: string, deployment: storage.Deployment): q.Promise<void> {
     if (!deployment.id) {
       return q.reject<void>(new Error("No deployment id"));
@@ -365,31 +489,42 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
-  // 패키지 관련 메서드
+  /**
+   * 배포에 새 패키지를 커밋합니다.
+   * - S3에 새로운 패키지를 추가하고, 패키지 히스토리를 관리합니다.
+   * - MongoDB에 저장된 배포 정보를 업데이트합니다.
+   * @where S3, MongoDB
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @param pkg 패키지 객체
+   * @returns 패키지 객체
+   */
   public commitPackage(accountId: string, appId: string, deploymentId: string, pkg: storage.Package): q.Promise<storage.Package> {
     pkg = storage.clone(pkg);
 
     return q.Promise<storage.Package>((resolve, reject) => {
+      // 배포 정보 및 패키지 히스토리를 조회합니다.
       this.getDeployment(accountId, appId, deploymentId)
         .then((deployment) => {
           return this._s3Client.loadPackageHistory(deploymentId);
         })
         .then((packageHistory) => {
-          // 새 라벨 생성
+          // 기존 패키지 히스토리 조회 후 새로운 패키지의 라벨을 생성합니다.
           pkg.label = this.getNextLabel(packageHistory);
           pkg.uploadTime = new Date().getTime();
 
-          // 패키지 히스토리에 추가
+          // 패키지 히스토리에 새로운 패키지를 추가합니다.
           packageHistory.push(pkg);
 
-          // 히스토리 크기 제한
+          // 히스토리 크기를 제한합니다.
           if (packageHistory.length > 50) {
             packageHistory = packageHistory.slice(packageHistory.length - 50);
           }
 
-          // 히스토리 저장
+          // 패키지 히스토리를 S3에 저장합니다.
           return this._s3Client.savePackageHistory(deploymentId, packageHistory).then(() => {
-            // 배포 업데이트
+            // 배포 정보를 MongoDB에 업데이트합니다.
             return this._mongoClient.updateDeployment(appId, deploymentId, {
               package: pkg,
             });
@@ -400,18 +535,42 @@ export class AwsMongoStorage implements storage.Storage {
     });
   }
 
+  /**
+   * 패키지 히스토리를 가져옵니다.
+   * - 배포 ID를 알고 있는 경우 사용합니다.
+   * - 배포 ID를 통해 배포 정보를 조회하고, 패키지 히스토리를 가져옵니다.
+   * @where S3
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @returns 패키지 히스토리
+   */
   public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
     return this.getDeployment(accountId, appId, deploymentId).then(() => {
       return this._s3Client.loadPackageHistory(deploymentId);
     });
   }
 
+  /**
+   * S3에서 패키지 히스토리를 가져옵니다.
+   * - 배포 키만 알고 있는 경우 사용합니다.
+   * - 배포 키를 통해 배포 ID를 조회하고, 패키지 히스토리를 가져옵니다.
+   * @param deploymentKey 배포 키
+   * @returns 패키지 히스토리
+   */
   public getPackageHistoryFromDeploymentKey(deploymentKey: string): q.Promise<storage.Package[]> {
     return this.getDeploymentInfo(deploymentKey).then((info) => {
       return this._s3Client.loadPackageHistory(info.deploymentId);
     });
   }
 
+  /**
+   * 패키지 히스토리를 삭제합니다.
+   * @where S3
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   */
   public clearPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<void> {
     return this.getDeployment(accountId, appId, deploymentId)
       .then(() => {
@@ -426,6 +585,14 @@ export class AwsMongoStorage implements storage.Storage {
       });
   }
 
+  /**
+   * 패키지 히스토리를 업데이트합니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @param history 패키지 히스토리
+   */
   public updatePackageHistory(accountId: string, appId: string, deploymentId: string, history: storage.Package[]): q.Promise<void> {
     return this.getDeployment(accountId, appId, deploymentId)
       .then(() => {
@@ -441,20 +608,44 @@ export class AwsMongoStorage implements storage.Storage {
       });
   }
 
-  // Blob 관련 메서드
+  /**
+   * Blob 파일을 추가합니다.
+   * @where S3
+   * @param blobId Blob ID
+   * @param addstream 추가할 스트림
+   * @param streamLength 스트림 길이
+   * @returns Blob ID
+   */
   public addBlob(blobId: string, addstream: stream.Readable, streamLength: number): q.Promise<string> {
     return this._s3Client.addBlob(blobId, addstream, streamLength);
   }
 
+  /**
+   * Blob 파일의 URL을 가져옵니다.
+   * @where S3
+   * @param blobId Blob ID
+   * @returns Blob URL
+   */
   public getBlobUrl(blobId: string): q.Promise<string> {
     return this._s3Client.getBlobUrl(blobId);
   }
 
+  /**
+   * Blob 파일을 제거합니다.
+   * @where S3
+   * @param blobId Blob ID
+   */
   public removeBlob(blobId: string): q.Promise<void> {
     return this._s3Client.removeBlob(blobId);
   }
 
-  // 액세스 키 관련 메서드
+  /**
+   * 액세스 키를 추가합니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param accessKey 액세스 키 객체
+   * @returns 액세스 키 ID
+   */
   public addAccessKey(accountId: string, accessKey: storage.AccessKey): q.Promise<string> {
     accessKey = storage.clone(accessKey);
     accessKey.id = shortid.generate();
@@ -462,18 +653,43 @@ export class AwsMongoStorage implements storage.Storage {
     return this._mongoClient.addAccessKey(accessKey, accountId).then(() => accessKey.id);
   }
 
+  /**
+   * 특정 액세스 키를 가져옵니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param accessKeyId 액세스 키 ID
+   * @returns 액세스 키 객체
+   */
   public getAccessKey(accountId: string, accessKeyId: string): q.Promise<storage.AccessKey> {
     return this._mongoClient.getAccessKey(accountId, accessKeyId);
   }
 
+  /**
+   * 계정의 모든 액세스 키를 가져옵니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @returns 액세스 키 배열
+   */
   public getAccessKeys(accountId: string): q.Promise<storage.AccessKey[]> {
     return this._mongoClient.getAccessKeys(accountId);
   }
 
+  /**
+   * 액세스 키를 제거합니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param accessKeyId 액세스 키 ID
+   */
   public removeAccessKey(accountId: string, accessKeyId: string): q.Promise<void> {
     return this._mongoClient.removeAccessKey(accountId, accessKeyId);
   }
 
+  /**
+   * 액세스 키를 업데이트합니다.
+   * @where MongoDB
+   * @param accountId 계정 ID
+   * @param accessKey 액세스 키 객체
+   */
   public updateAccessKey(accountId: string, accessKey: storage.AccessKey): q.Promise<void> {
     if (!accessKey.id) {
       return q.reject<void>(new Error("No access key id"));
@@ -486,7 +702,11 @@ export class AwsMongoStorage implements storage.Storage {
     return this._mongoClient.updateAccessKey(accountId, accessKey.id, updates);
   }
 
-  // 유틸리티 메서드
+  /**
+   * 새 라벨을 생성합니다.
+   * @param packageHistory 패키지 히스토리
+   * @returns 새 라벨
+   */
   private getNextLabel(packageHistory: storage.Package[]): string {
     if (packageHistory.length === 0) {
       return "v1";
@@ -497,7 +717,11 @@ export class AwsMongoStorage implements storage.Storage {
     return "v" + (lastVersion + 1);
   }
 
-  // 데이터베이스 초기화 (개발/테스트용)
+  /**
+   * 모든 데이터를 삭제합니다.
+   * 개발/테스트용으로만 사용해야 합니다.
+   * @returns 삭제 완료 Promise
+   */
   public dropAll(): q.Promise<void> {
     console.warn("dropAll() is not implemented for production use");
     return q(<void>null);

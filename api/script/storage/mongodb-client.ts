@@ -4,11 +4,11 @@
 import { Collection, Db, MongoClient } from "mongodb";
 import * as q from "q";
 import * as storage from "./storage";
+import { AccessKey, Account, App, Deployment } from "./storage";
 import { StorageKeys } from "./storage-keys";
-import { Account, App, Deployment, AccessKey } from "./storage";
 
-// MongoDB 연결 및 컬렉션 관리
 export interface MongoDBConnection {
+  // MongoDB 서버에 대한 연결 클라이언트
   client: MongoClient;
   db: Db;
   collections: {
@@ -22,19 +22,27 @@ export interface MongoDBConnection {
 
 export class MongoDBClient {
   private _connection: MongoDBConnection;
+  // setup 호출 결과
   private _setupPromise: q.Promise<void>;
 
   constructor(mongoUrl?: string) {
-    const _mongoUrl = mongoUrl ?? process.env.MONGODB_URI ?? "mongodb://localhost:27017/codepush";
+    const _mongoUrl = mongoUrl ?? process.env.MONGODB_URI;
     this._setupPromise = this.setup(_mongoUrl);
   }
 
-  // MongoDB 연결 설정
+  /**
+   * MongoDB 데이터베이스 연결을 설정합니다.
+   * @param mongoUrl MongoDB 연결 URL
+   * @returns 설정 완료 Promise
+   */
   private setup(mongoUrl: string): q.Promise<void> {
     return q.Promise<void>((resolve, reject) => {
+      // 제공된 MongoDB URL을 사용해 MongoDB 서버에 연결을 시도합니다.
       MongoClient.connect(mongoUrl)
         .then((client) => {
+          // 연결된 MongoDB 클라이언트를 사용하여 데이터베이스 인스턴스를 생성합니다.
           const db = client.db();
+          // 연결된 데이터베이스에서 필요한 컬렉션을 생성합니다.
           this._connection = {
             client,
             db,
@@ -47,7 +55,7 @@ export class MongoDBClient {
             },
           };
 
-          // 인덱스 생성
+          // 필요한 인덱스를 생성합니다.
           return q.all([
             this._connection.collections.accounts.createIndex({ email: 1 }, { unique: true }),
             this._connection.collections.apps.createIndex({ "collaborators.email": 1 }),
@@ -59,12 +67,17 @@ export class MongoDBClient {
           resolve();
         })
         .catch((error) => {
+          console.error("🔴 MongoDB 연결 오류:", error);
           reject(error);
         });
     });
   }
 
-  // 헬스 체크
+  /**
+   * MongoDB 연결 상태를 확인합니다.
+   * - DB 초기 설정 완료 후 ping 명령을 실행해 서버 응답을 확인합니다.
+   * @returns 완료 Promise
+   */
   public checkHealth(): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -72,28 +85,35 @@ export class MongoDBClient {
           .command({ ping: 1 })
           .then(() => resolve())
           .catch((error) =>
-            reject(storage.storageError(storage.ErrorCode.ConnectionFailed, "MongoDB connection failed: " + error.message))
+            reject(storage.storageError(storage.ErrorCode.ConnectionFailed, "🔴 MongoDB connection failed: " + error.message))
           );
       });
     });
   }
 
-  // 계정 관련 메서드
+  /**
+   * 계정을 데이터베이스에 추가합니다.
+   * @param account 추가할 계정 정보
+   * @returns 계정 ID
+   */
   public addAccount(account: storage.Account): q.Promise<string> {
     return this._setupPromise.then(() => {
       return q.Promise<string>((resolve, reject) => {
         this._connection.collections.accounts
+          // 계정 정보를 데이터베이스에 추가합니다.
           .insertOne({
             id: StorageKeys.getAccountId(account.id),
             ...account,
-            email: account.email.toLowerCase(), // 이메일은 소문자로 저장
+            email: account.email.toLowerCase(),
           })
+          // 성공 시 계정 ID 반환
           .then(() => resolve(account.id))
           .catch((error) => {
             if (error.code === 11000) {
               // MongoDB 중복 키 에러
               reject(storage.storageError(storage.ErrorCode.AlreadyExists));
             } else {
+              console.error("🔴 MongoDB 계정 추가 오류:", error);
               reject(error);
             }
           });
@@ -101,6 +121,11 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 계정을 조회합니다.
+   * @param accountId 조회할 계정 ID
+   * @returns 계정 정보
+   */
   public getAccount(accountId: string): q.Promise<storage.Account> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Account>((resolve, reject) => {
@@ -110,7 +135,8 @@ export class MongoDBClient {
             if (!account) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
-              delete account.id; // MongoDB ID 제거
+              // 내부 식별자를 제거합니다.
+              delete account.id;
               resolve(account);
             }
           })
@@ -119,6 +145,11 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 이메일로 계정을 조회합니다.
+   * @param email 조회할 이메일
+   * @returns 계정 정보
+   */
   public getAccountByEmail(email: string): q.Promise<storage.Account> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Account>((resolve, reject) => {
@@ -139,6 +170,12 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 계정 정보를 업데이트합니다.
+   * @param email 업데이트할 계정의 이메일
+   * @param updates 업데이트할 정보
+   * @returns 완료 Promise
+   */
   public updateAccount(email: string, updates: storage.Account): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -156,7 +193,11 @@ export class MongoDBClient {
     });
   }
 
-  // 앱 관련 메서드
+  /**
+   * 앱을 데이터베이스에 추가합니다.
+   * @param app 추가할 앱 정보
+   * @returns 완료 Promise
+   */
   public addApp(app: storage.App): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -177,6 +218,11 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 앱을 조회합니다.
+   * @param appId 조회할 앱 ID
+   * @returns 앱 정보
+   */
   public getApp(appId: string): q.Promise<storage.App> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.App>((resolve, reject) => {
@@ -195,6 +241,11 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 계정 ID로 앱 목록을 조회합니다.
+   * @param accountId 조회할 계정 ID
+   * @returns 앱 정보 배열
+   */
   public getApps(accountId: string): q.Promise<storage.App[]> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.App[]>((resolve, reject) => {
@@ -212,6 +263,12 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 앱 정보를 업데이트합니다.
+   * @param appId 업데이트할 앱 ID
+   * @param updates 업데이트할 정보
+   * @returns 완료 Promise
+   */
   public updateApp(appId: string, updates: any): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -229,13 +286,18 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 앱 정보를 삭제합니다.
+   * @param appId 삭제할 앱 ID
+   * @returns 완료 Promise
+   */
   public removeApp(appId: string): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.apps
           .deleteOne({ id: StorageKeys.getAppId(appId) })
           .then(() => {
-            // 관련 배포도 삭제
+            // 관련된 배포 정보도 삭제
             return this._connection.collections.deployments.deleteMany({ appId });
           })
           .then(() => resolve())
@@ -244,7 +306,12 @@ export class MongoDBClient {
     });
   }
 
-  // 배포 관련 메서드
+  /**
+   * 배포 데이터를 추가합니다.
+   * @param addId 추가할 배포의 계정 ID
+   * @param deployment 추가할 배포 정보
+   * @returns 완료 Promise
+   */
   public addDeployment(addId: string, deployment: storage.Deployment): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -265,6 +332,12 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 배포 데이터를 조회합니다.
+   * @param appId 조회할 앱 ID
+   * @param deploymentId 조회할 배포 ID
+   * @returns 배포 정보
+   */
   public getDeployment(appId: string, deploymentId: string): q.Promise<storage.Deployment> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Deployment>((resolve, reject) => {
@@ -285,7 +358,14 @@ export class MongoDBClient {
     });
   }
 
-  public getDeploymentInfo(deploymentKey: string, accountId?:string, appName?:string): q.Promise<storage.DeploymentInfo> {
+  /**
+   * 배포 정보를 조회합니다.
+   * @param deploymentKey 조회할 배포 키
+   * @param accountId 조회할 계정 ID
+   * @param appName 조회할 앱 이름
+   * @returns 배포 정보
+   */
+  public getDeploymentInfo(deploymentKey: string, accountId?: string, appName?: string): q.Promise<storage.DeploymentInfo> {
     const query: any = {};
 
     if (appName) {
@@ -297,25 +377,29 @@ export class MongoDBClient {
     }
 
     return q.Promise<storage.DeploymentInfo>((resolve, reject) => {
-      this._connection.collections.apps.findOne(query)
-        .then(findByAccountIdAndName => {
-          return this._connection.collections.deployments
-            .findOne({ key: deploymentKey })
-            .then((deployment) => {
-              if (!deployment) {
-                reject(storage.storageError(storage.ErrorCode.NotFound));
-              } else {
-                resolve({
-                  appId: findByAccountIdAndName.id,
-                  deploymentId: deployment.id,
-                });
-              }
-            });
+      this._connection.collections.apps
+        .findOne(query)
+        .then((findByAccountIdAndName) => {
+          return this._connection.collections.deployments.findOne({ key: deploymentKey }).then((deployment) => {
+            if (!deployment) {
+              reject(storage.storageError(storage.ErrorCode.NotFound));
+            } else {
+              resolve({
+                appId: findByAccountIdAndName.id,
+                deploymentId: deployment.id,
+              });
+            }
+          });
         })
         .catch(reject);
     });
   }
 
+  /**
+   * 앱 ID로 배포 목록을 조회합니다.
+   * @param appId 조회할 앱 ID
+   * @returns 배포 정보 배열
+   */
   public getDeployments(appId: string): q.Promise<storage.Deployment[]> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Deployment[]>((resolve, reject) => {
@@ -331,6 +415,13 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 배포 정보를 업데이트합니다.
+   * @param appId 업데이트할 앱 ID
+   * @param deploymentId 업데이트할 배포 ID
+   * @param updates 업데이트할 정보
+   * @returns 완료 Promise
+   */
   public updateDeployment(appId: string, deploymentId: string, updates: any): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -348,6 +439,12 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 배포 정보를 삭제합니다.
+   * @param appId 삭제할 앱 ID
+   * @param deploymentId 삭제할 배포 ID
+   * @returns 완료 Promise
+   */
   public removeDeployment(appId: string, deploymentId: string): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -361,11 +458,15 @@ export class MongoDBClient {
     });
   }
 
-  // 액세스 키 관련 메서드
+  /**
+   * 액세스 키 정보를 추가합니다.
+   * @param accessKey 추가할 액세스 키 정보
+   * @param accountId 추가할 액세스 키의 계정 ID
+   * @returns 완료 Promise
+   */
   public addAccessKey(accessKey: storage.AccessKey, accountId: string): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
-        // 액세스 키 저장
         this._connection.collections.accessKeys
           .insertOne({
             id: StorageKeys.getAccessKeyId(accountId, accessKey.id),
@@ -373,7 +474,6 @@ export class MongoDBClient {
             createdBy: accountId,
           })
           .then(() => {
-            // 액세스 키 포인터 저장 (이름으로 조회 가능하도록)
             return this._connection.collections.accessKeyPointers.insertOne({
               id: StorageKeys.getAccessKeyPointerId(accessKey.name),
               accountId,
@@ -392,6 +492,12 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 액세스 키 정보를 조회합니다.
+   * @param accountId 조회할 계정 ID
+   * @param accessKeyId 조회할 액세스 키 ID
+   * @returns 액세스 키 정보
+   */
   public getAccessKey(accountId: string, accessKeyId: string): q.Promise<storage.AccessKey> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.AccessKey>((resolve, reject) => {
@@ -413,6 +519,11 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 계정 ID로 액세스 키 목록을 조회합니다.
+   * @param accountId 조회할 계정 ID
+   * @returns 액세스 키 정보 배열
+   */
   public getAccessKeys(accountId: string): q.Promise<storage.AccessKey[]> {
     return this._setupPromise.then(() => {
       return q.Promise<storage.AccessKey[]>((resolve, reject) => {
@@ -431,6 +542,11 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 액세스 키 이름으로 계정 ID를 조회합니다.
+   * @param accessKeyName 조회할 액세스 키 이름
+   * @returns 계정 ID
+   */
   public getAccountIdFromAccessKey(accessKeyName: string): q.Promise<string> {
     return this._setupPromise.then(() => {
       return q.Promise<string>((resolve, reject) => {
@@ -452,6 +568,13 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 액세스 키 정보를 업데이트합니다.
+   * @param accountId 업데이트할 액세스 키의 계정 ID
+   * @param accessKeyId 업데이트할 액세스 키 ID
+   * @param updates 업데이트할 정보
+   * @returns 완료 Promise
+   */
   public updateAccessKey(accountId: string, accessKeyId: string, updates: any): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -483,6 +606,12 @@ export class MongoDBClient {
     });
   }
 
+  /**
+   * 액세스 키 정보를 삭제합니다.
+   * @param accountId 삭제할 액세스 키의 계정 ID
+   * @param accessKeyId 삭제할 액세스 키 ID
+   * @returns 완료 Promise
+   */
   public removeAccessKey(accountId: string, accessKeyId: string): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
@@ -514,7 +643,10 @@ export class MongoDBClient {
     });
   }
 
-  // 연결 종료
+  /**
+   * MongoDB 연결을 종료합니다.
+   * @returns 완료 Promise
+   */
   public close(): q.Promise<void> {
     if (this._connection && this._connection.client) {
       return q.Promise<void>((resolve) => {
@@ -527,12 +659,18 @@ export class MongoDBClient {
     return q(<void>null);
   }
 
-  // MongoDB 연결 객체 반환
+  /**
+   * MongoDB 연결 객체를 반환합니다.
+   * @returns MongoDB 연결 객체
+   */
   public getConnection(): MongoDBConnection {
     return this._connection;
   }
 
-  // 설정 프로미스 반환
+  /**
+   * 설정 프로미스를 반환합니다.
+   * @returns 설정 프로미스
+   */
   public getSetupPromise(): q.Promise<void> {
     return this._setupPromise;
   }

@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 /**
- * 스토리지 키 생성 로직을 중앙화하여 관리합니다.
+ * 스토리지 키 생성 로직을 중앙화하여 통일된 형식으로 관리합니다.
  */
 export class StorageKeys {
   // MongoDB 문서 ID 생성

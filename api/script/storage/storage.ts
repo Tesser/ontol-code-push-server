@@ -85,6 +85,9 @@ export interface App {
 
 /**
  * 애플리케이션 배포 정보를 저장합니다.
+ * - 배포 자체의 상세 정보
+ * - 배포의 이름, 키, 패키지 정보
+ * - 패키지 관리 관련 메서드에서 직접 사용됩니다.
  */
 export interface Deployment {
   /*generated*/ createdTime: number;
@@ -96,6 +99,9 @@ export interface Deployment {
 
 /**
  * 배포 정보 정의
+ * - 배포 식별 정보(배포가 속한 앱의 ID와 배포의 고유 ID)만 포함됩니다.
+ * - 배포에 대한 간략한 정보만 필요할 때 사용합니다.
+ * - 다른 API에서 `deploymentKey`만 가지고 있을 때 실제 `deploymentId`를 찾는 용도로 사용합니다.
  */
 export interface DeploymentInfo {
   appId: string;
