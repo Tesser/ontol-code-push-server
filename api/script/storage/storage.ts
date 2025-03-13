@@ -23,19 +23,19 @@ export enum ErrorCode {
 /**
  * 릴리스 방법 정의
  */
-export module ReleaseMethod {
-  export const Upload = "Upload";
-  export const Promote = "Promote";
-  export const Rollback = "Rollback";
-}
+export const ReleaseMethod = {
+  Upload: "Upload",
+  Promote: "Promote",
+  Rollback: "Rollback",
+} as const;
 
 /**
  * 권한 정의
  */
-export module Permissions {
-  export const Owner = "Owner";
-  export const Collaborator = "Collaborator";
-}
+export const Permissions = {
+  Owner: "Owner",
+  Collaborator: "Collaborator",
+} as const;
 
 /**
  * 스토리지 에러 정의

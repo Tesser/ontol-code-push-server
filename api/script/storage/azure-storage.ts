@@ -24,7 +24,7 @@ import { isPrototypePollutionKey } from "./storage";
  * 애플리케이션, 계정, 배포의 키를 생성합니다.
  * 스토리지 시스템에서 데이터를 계층적으로 관리할 수 있도록 고유한 키를 생성하는 역할을 합니다.
  */
-module Keys {
+namespace Keys {
   // 키를 구성할 때 값들을 구분하기 위해 사용합니다.
   const DELIMITER = " ";
   // 키의 끝 부분을 특정 값으로 표시하여 마지막 요소(leaf node)임을 나타냅니다.

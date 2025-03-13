@@ -2,7 +2,6 @@
 // Licensed under the MIT License.
 
 import * as assert from "assert";
-import * as express from "express";
 import * as q from "q";
 import * as redis from "redis";
 
@@ -22,39 +21,40 @@ export interface DeploymentMetrics {
   [labelStatus: string]: number;
 }
 
-export module Utilities {
-  export function isValidDeploymentStatus(status: string): boolean {
+export const Utilities = {
+  isValidDeploymentStatus(status: string): boolean {
     return status === DEPLOYMENT_SUCCEEDED || status === DEPLOYMENT_FAILED || status === DOWNLOADED;
-  }
+  },
 
-  export function getLabelStatusField(label: string, status: string): string {
-    if (isValidDeploymentStatus(status)) {
+  getLabelStatusField(label: string, status: string): string {
+    if (this.isValidDeploymentStatus(status)) {
       return label + ":" + status;
     } else {
       return null;
     }
-  }
+  },
 
-  export function getLabelActiveCountField(label: string): string {
+  getLabelActiveCountField(label: string): string {
     if (label) {
       return label + ":" + ACTIVE;
     } else {
       return null;
     }
-  }
+  },
 
-  export function getDeploymentKeyHash(deploymentKey: string): string {
+  getDeploymentKeyHash(deploymentKey: string): string {
     return "deploymentKey:" + deploymentKey;
-  }
+  },
 
-  export function getDeploymentKeyLabelsHash(deploymentKey: string): string {
+  getDeploymentKeyLabelsHash(deploymentKey: string): string {
     return "deploymentKeyLabels:" + deploymentKey;
-  }
+  },
 
-  export function getDeploymentKeyClientsHash(deploymentKey: string): string {
+  getDeploymentKeyClientsHash(deploymentKey: string): string {
     return "deploymentKeyClients:" + deploymentKey;
   }
-}
+} as const;
+
 
 class PromisifiedRedisClient {
   // An incomplete set of promisified versions of the original redis methods
