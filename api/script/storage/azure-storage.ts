@@ -271,7 +271,7 @@ export class AzureStorage implements storage.Storage {
     this._setupPromise = this.setup(accountName, accountKey);
   }
 
-  public reinitialize(accountName?: string, accountKey?: string): q.Promise<void> {
+  public initialize(accountName?: string, accountKey?: string): q.Promise<void> {
     console.log("Re-initializing Azure storage");
     return this.setup(accountName, accountKey);
   }

@@ -448,7 +448,6 @@ export class NameResolver {
         .then((apps: App[]): App => {
           const app: App = NameResolver.findByName(apps, name);
           if (!app) throw storageError(ErrorCode.NotFound);
-
           return app;
         })
         // 존재하지 않으면 "App XXX does not exist." 에러를 반환합니다.

@@ -130,7 +130,7 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Account>((resolve, reject) => {
         this._connection.collections.accounts
-          .findOne({ id: StorageKeys.getAccountId(accountId) })
+          .findOne({ id: accountId })
           .then((account) => {
             if (!account) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
@@ -140,7 +140,9 @@ export class MongoDBClient {
               resolve(account);
             }
           })
-          .catch(reject);
+          .catch((error) => {
+            reject(error);
+          });
       });
     });
   }
@@ -206,7 +208,9 @@ export class MongoDBClient {
             id: StorageKeys.getAppId(app.id),
             ...app,
           })
-          .then(() => resolve())
+          .then(() => {
+            resolve();
+          })
           .catch((error) => {
             if (error.code === 11000) {
               reject(storage.storageError(storage.ErrorCode.AlreadyExists));
@@ -227,7 +231,7 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<storage.App>((resolve, reject) => {
         this._connection.collections.apps
-          .findOne({ id: StorageKeys.getAppId(appId) })
+          .findOne({ id: appId })
           .then((app) => {
             if (!app) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
@@ -250,15 +254,15 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<storage.App[]>((resolve, reject) => {
         this._connection.collections.apps
-          .find({
-            [`collaborators.${accountId}`]: { $exists: true },
-          })
+          .find({})
           .toArray()
           .then((apps) => {
-            apps.forEach((app) => delete app.id);
+            apps.forEach((app) => delete app._id);
             resolve(apps);
           })
-          .catch(reject);
+          .catch((error) => {
+            reject(error);
+          });
       });
     });
   }
@@ -320,7 +324,9 @@ export class MongoDBClient {
             id: StorageKeys.getDeploymentId(addId, deployment.id),
             ...deployment,
           })
-          .then(() => resolve())
+          .then(() => {
+            resolve();
+          })
           .catch((error) => {
             if (error.code === 11000) {
               reject(storage.storageError(storage.ErrorCode.AlreadyExists));
@@ -353,7 +359,9 @@ export class MongoDBClient {
               resolve(deployment);
             }
           })
-          .catch(reject);
+          .catch((error) => {
+            reject(error);
+          });
       });
     });
   }
@@ -404,13 +412,15 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Deployment[]>((resolve, reject) => {
         this._connection.collections.deployments
-          .find({ appId })
+          .find({})
           .toArray()
           .then((deployments) => {
             deployments.forEach((deployment) => delete deployment.id);
             resolve(deployments);
           })
-          .catch(reject);
+          .catch((error) => {
+            reject(error);
+          });
       });
     });
   }

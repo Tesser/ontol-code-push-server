@@ -37,8 +37,8 @@ export class AwsMongoStorage implements storage.Storage {
    * @param awsSecretAccessKey AWS 비밀 액세스 키
    * @returns 초기화 재설정 완료 Promise
    */
-  public reinitialize(mongoUrl?: string, awsRegion?: string, awsAccessKeyId?: string, awsSecretAccessKey?: string): q.Promise<void> {
-    console.log("Re-initializing AWS/MongoDB storage");
+  public initialize(mongoUrl?: string, awsRegion?: string, awsAccessKeyId?: string, awsSecretAccessKey?: string): q.Promise<void> {
+    console.log("Initializing AWS/MongoDB storage");
 
     // 기존 연결 종료
     return this._mongoClient.close().then(() => {
@@ -413,7 +413,9 @@ export class AwsMongoStorage implements storage.Storage {
       .then(() => {
         return this._mongoClient.addDeployment(appId, deployment);
       })
-      .then(() => deployment.id);
+      .then(() => {
+        return deployment.id;
+      });
   }
 
   /**
