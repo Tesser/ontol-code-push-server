@@ -17,9 +17,9 @@ import * as storage from "./storage";
 import { StorageKeys } from "./storage-keys";
 
 export class CustomS3Client {
-  private static HISTORY_BLOB_BUCKET_NAME = "packagehistoryv1";
-  private static BLOB_BUCKET_NAME = "storagev2";
-  private static MAX_PACKAGE_HISTORY_LENGTH = 50;
+  private static BUCKET_NAME = "ontol-code-push";
+  private static HISTORY_PREFIX = "history/";
+  private static BLOB_PREFIX = "blob/";
 
   private _s3Client: S3Client;
   private _setupPromise: q.Promise<void>;
@@ -29,8 +29,15 @@ export class CustomS3Client {
   private _cloudFrontDistributionId: string;
   private _useCloudFront: boolean = false;
 
+  /**
+   * S3 클라이언트 생성자
+   * @param region 지역 코드 (기본값: process.env.AWS_REGION)
+   * @param accessKeyId AWS 액세스 키 ID (기본값: process.env.AWS_ACCESS_KEY_ID)
+   * @param secretAccessKey AWS 비밀 액세스 키 (기본값: process.env.AWS_SECRET_ACCESS_KEY)
+   * @param cloudFrontDistributionId CloudFront 배포 ID (기본값: process.env.CLOUDFRONT_DISTRIBUTION_ID)
+   */
   constructor(region?: string, accessKeyId?: string, secretAccessKey?: string, cloudFrontDistributionId?: string) {
-    const _region = region ?? process.env.AWS_REGION ?? "us-east-1";
+    const _region = region ?? process.env.AWS_REGION ?? "ap-northeast-2";
     const _accessKeyId = accessKeyId ?? process.env.AWS_ACCESS_KEY_ID;
     const _secretAccessKey = secretAccessKey ?? process.env.AWS_SECRET_ACCESS_KEY;
 
@@ -76,7 +83,7 @@ export class CustomS3Client {
               new CreateBucketCommand({
                 Bucket: bucketName,
                 CreateBucketConfiguration: {
-                  LocationConstraint: 'ap-northeast-2'
+                  LocationConstraint: "ap-northeast-2",
                 },
               })
             );
@@ -86,15 +93,12 @@ export class CustomS3Client {
         }
       };
 
-      Promise.all([
-        checkAndCreateBucket(CustomS3Client.BLOB_BUCKET_NAME),
-        checkAndCreateBucket(CustomS3Client.HISTORY_BLOB_BUCKET_NAME),
-      ])
+      checkAndCreateBucket(CustomS3Client.BUCKET_NAME)
         .then(() => {
           // 헬스 체크용 객체 생성
           return Promise.all([
-            this.uploadString(CustomS3Client.BLOB_BUCKET_NAME, StorageKeys.getHealthCheckKey(), "health"),
-            this.uploadString(CustomS3Client.HISTORY_BLOB_BUCKET_NAME, StorageKeys.getHealthCheckKey(), "health"),
+            this.uploadString(CustomS3Client.BUCKET_NAME, CustomS3Client.BLOB_PREFIX + StorageKeys.getHealthCheckKey(), "health"),
+            this.uploadString(CustomS3Client.BUCKET_NAME, CustomS3Client.HISTORY_PREFIX + StorageKeys.getHealthCheckKey(), "health"),
           ]);
         })
         .then(() => resolve())
@@ -106,19 +110,22 @@ export class CustomS3Client {
   public checkHealth(): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
-        Promise.all([this.healthCheck(CustomS3Client.BLOB_BUCKET_NAME), this.healthCheck(CustomS3Client.HISTORY_BLOB_BUCKET_NAME)])
+        Promise.all([
+          this.healthCheck(CustomS3Client.BUCKET_NAME, CustomS3Client.BLOB_PREFIX + StorageKeys.getHealthCheckKey()),
+          this.healthCheck(CustomS3Client.BUCKET_NAME, CustomS3Client.HISTORY_PREFIX + StorageKeys.getHealthCheckKey()),
+        ])
           .then(() => resolve())
           .catch((error) => reject(error));
       });
     });
   }
 
-  private healthCheck(bucketName: string): Promise<void> {
+  private healthCheck(bucketName: string, key: string): Promise<void> {
     return this._s3Client
       .send(
         new GetObjectCommand({
           Bucket: bucketName,
-          Key: StorageKeys.getHealthCheckKey(),
+          Key: key,
         })
       )
       .then(async (response) => {
@@ -232,17 +239,17 @@ export class CustomS3Client {
 
   // 패키지 히스토리 저장
   public savePackageHistory(deploymentId: string, packageHistory: storage.Package[]): q.Promise<void> {
-    const key = StorageKeys.getPackageHistoryBlobId(deploymentId);
+    const key = CustomS3Client.HISTORY_PREFIX + StorageKeys.getPackageHistoryBlobId(deploymentId);
     const content = JSON.stringify(packageHistory);
 
-    return this.uploadString(CustomS3Client.HISTORY_BLOB_BUCKET_NAME, key, content);
+    return this.uploadString(CustomS3Client.BUCKET_NAME, key, content);
   }
 
   // 패키지 히스토리 로드
   public loadPackageHistory(deploymentId: string): q.Promise<storage.Package[]> {
-    const key = StorageKeys.getPackageHistoryBlobId(deploymentId);
+    const key = CustomS3Client.HISTORY_PREFIX + StorageKeys.getPackageHistoryBlobId(deploymentId);
 
-    return this.downloadString(CustomS3Client.HISTORY_BLOB_BUCKET_NAME, key)
+    return this.downloadString(CustomS3Client.BUCKET_NAME, key)
       .then((content) => {
         try {
           return JSON.parse(content);
@@ -309,10 +316,11 @@ export class CustomS3Client {
 
   // 패키지 업로드 후 CloudFront 캐시 무효화
   public addBlob(blobId: string, stream: stream.Readable, streamLength: number): q.Promise<string> {
-    return this.uploadStream(CustomS3Client.BLOB_BUCKET_NAME, blobId, stream, streamLength).then(() => {
+    const key = CustomS3Client.BLOB_PREFIX + blobId;
+    return this.uploadStream(CustomS3Client.BUCKET_NAME, key, stream, streamLength).then(() => {
       // 새 객체가 업로드되면 관련 CloudFront 캐시 무효화
       if (this._useCloudFront) {
-        return this.invalidateCache(["/" + blobId]).then(() => blobId);
+        return this.invalidateCache(["/" + key]).then(() => blobId);
       }
       return blobId;
     });
@@ -320,18 +328,20 @@ export class CustomS3Client {
 
   // 패키지 URL 가져오기
   public getBlobUrl(blobId: string): q.Promise<string> {
+    const key = CustomS3Client.BLOB_PREFIX + blobId;
     // CloudFront가 활성화된 경우 CloudFront URL 반환
     if (this._useCloudFront) {
-      return this.getCloudFrontUrl(blobId);
+      return this.getCloudFrontUrl(key);
     }
 
     // 기존 S3 URL 생성 로직
-    return this.getSignedUrl(CustomS3Client.BLOB_BUCKET_NAME, blobId);
+    return this.getSignedUrl(CustomS3Client.BUCKET_NAME, key);
   }
 
   // 패키지 삭제
   public removeBlob(blobId: string): q.Promise<void> {
-    return this.deleteObject(CustomS3Client.BLOB_BUCKET_NAME, blobId);
+    const key = CustomS3Client.BLOB_PREFIX + blobId;
+    return this.deleteObject(CustomS3Client.BUCKET_NAME, key);
   }
 
   // S3 에러 처리
