@@ -10,13 +10,13 @@ import * as request from "supertest";
 import superagent = require("superagent");
 
 import * as defaultServer from "../script/default-server";
+import * as storage from "../script/infrastructure/storage";
 import * as redis from "../script/redis-manager";
 import * as restTypes from "../script/types/rest-definitions";
-import * as storage from "../script/storage/storage";
 import * as testUtils from "./utils";
 
-import { AzureStorage } from "../script/storage/azure-storage";
-import { JsonStorage } from "../script/storage/json-storage";
+import { AzureStorage } from "../script/infrastructure/storage/azure-storage";
+import { JsonStorage } from "../script/infrastructure/storage/json-storage";
 
 import Permissions = storage.Permissions;
 

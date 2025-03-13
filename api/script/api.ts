@@ -3,13 +3,13 @@
 
 import { RequestHandler, Router } from "express";
 
-import { AcquisitionConfig, getAcquisitionRouter, getHealthRouter } from "./routes/acquisition";
-import { AppInsights } from "./routes/app-insights";
-import { getHeadersMiddleware, HeadersConfig } from "./routes/headers";
-import { InputSanitizer } from "./routes/input-sanitizer";
-import { getManagementRouter, ManagementConfig } from "./routes/management";
-import { AuthenticationConfig, PassportAuthentication } from "./routes/passport-authentication";
-import { RequestTimeoutHandler } from "./routes/request-timeout";
+import { AcquisitionConfig, getAcquisitionRouter, getHealthRouter } from "./controller/acquisitionController";
+import { getManagementRouter, ManagementConfig } from "./controller/managementController";
+import { getHeadersMiddleware, HeadersConfig } from "./middleware/headers";
+import { InputSanitizer } from "./middleware/input-sanitizer";
+import { RequestTimeoutHandler } from "./middleware/request-timeout";
+import { AppInsights } from "./services/app-insights";
+import { AuthenticationConfig, PassportAuthentication } from "./services/passport-authentication";
 
 export function headers(config: HeadersConfig): RequestHandler {
   return getHeadersMiddleware(config);

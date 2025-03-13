@@ -5,9 +5,9 @@ import * as assert from "assert";
 import * as q from "q";
 import * as shortid from "shortid";
 
-import { AzureStorage } from "../script/storage/azure-storage";
-import { JsonStorage } from "../script/storage/json-storage";
-import * as storageTypes from "../script/storage/storage";
+import * as storageTypes from "../script/infrastructure/storage";
+import { AzureStorage } from "../script/infrastructure/storage/azure-storage";
+import { JsonStorage } from "../script/infrastructure/storage/json-storage";
 import * as utils from "./utils";
 
 import Promise = q.Promise;

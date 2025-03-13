@@ -3,9 +3,9 @@
 
 import { Collection, Db, MongoClient } from "mongodb";
 import * as q from "q";
-import * as storage from "./storage";
-import { AccessKey, Account, App, Deployment } from "./storage";
-import { StorageKeys } from "./storage-keys";
+import * as storage from "../storage";
+import { AccessKey, Account, App, Deployment } from "../storage";
+import { StorageKeys } from "../storage-keys";
 
 export interface MongoDBConnection {
   // MongoDB 서버에 대한 연결 클라이언트

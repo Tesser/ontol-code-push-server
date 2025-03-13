@@ -4,9 +4,9 @@
 import * as q from "q";
 import * as shortid from "shortid";
 import * as stream from "stream";
-import { MongoDBClient } from "./mongodb-client";
-import { CustomS3Client } from "./s3-client";
+import { MongoDBClient } from "./database/mongodb-client";
 import * as storage from "./storage";
+import { CustomS3Client } from "./storage/s3-client";
 
 export class AwsMongoStorage implements storage.Storage {
   private _mongoClient: MongoDBClient;

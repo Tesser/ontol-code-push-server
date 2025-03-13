@@ -8,7 +8,7 @@ import { Promise } from "q";
 import * as shortid from "shortid";
 import * as stream from "stream";
 
-import * as storage from "../script/storage/storage";
+import * as storage from "../script/infrastructure/storage";
 import * as restTypes from "../script/types/rest-definitions";
 
 const ACCESS_KEY_EXPIRY = 1000 * 60 * 60 * 24 * 60; // 60 days.

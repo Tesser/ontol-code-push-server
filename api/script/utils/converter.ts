@@ -3,6 +3,7 @@
 
 import nodeDeepCopy = require("node-deepcopy");
 
+import * as redis from "../redis-manager";
 import {
   AccessKey,
   AccessKeyRequest,
@@ -16,8 +17,7 @@ import {
   Package,
 } from "../types/rest-definitions";
 
-import Storage = require("../storage/storage");
-import * as redis from "../redis-manager";
+import Storage = require("../infrastructure/storage");
 
 export function accessKeyRequestFromBody(body: AccessKeyRequest): AccessKeyRequest {
   const accessKeyRequest: AccessKeyRequest = <AccessKeyRequest>{};

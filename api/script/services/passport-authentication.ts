@@ -2,21 +2,19 @@
 // Licensed under the MIT License.
 
 import * as cookieSession from "cookie-session";
-import { Request, Response, Router, RequestHandler } from "express";
+import { Request, RequestHandler, Response, Router } from "express";
+import rateLimit from "express-rate-limit";
 import * as passport from "passport";
-const passportActiveDirectory = require("passport-azure-ad");
-import * as passportBearer from "passport-http-bearer";
 import * as passportGitHub from "passport-github2";
+import * as passportBearer from "passport-http-bearer";
 import * as passportWindowsLive from "passport-windowslive";
 import * as q from "q";
-import * as superagent from "superagent"
-import rateLimit from "express-rate-limit";
+const passportActiveDirectory = require("passport-azure-ad");
 
-import * as converterUtils from "../utils/converter";
+import * as storage from "../infrastructure/storage";
 import * as restErrorUtils from "../utils/rest-error-handling";
 import * as restHeaders from "../utils/rest-headers";
 import * as security from "../utils/security";
-import * as storage from "../storage/storage";
 import * as validationUtils from "../utils/validation";
 
 import Promise = q.Promise;
