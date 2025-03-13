@@ -4,17 +4,17 @@
 import { Response } from "express";
 import * as api from "./api";
 import { fileUploadMiddleware } from "./file-upload-manager";
+import { Storage } from "./infrastructure/storage";
+import { AzureStorage } from "./infrastructure/storage/azure-storage";
+import { JsonStorage } from "./infrastructure/storage/json-storage";
 import { RedisManager } from "./redis-manager";
-import { AzureStorage } from "./storage/azure-storage";
-import { JsonStorage } from "./storage/json-storage";
-import { Storage } from "./storage/storage";
 const { DefaultAzureCredential } = require("@azure/identity");
 const { SecretClient } = require("@azure/keyvault-secrets");
 
 import * as bodyParser from "body-parser";
 import * as express from "express";
 import * as q from "q";
-import { AwsMongoStorage } from "./storage/aws-mongo-storage";
+import { AwsMongoStorage } from "./infrastructure/aws-mongodb";
 const domain = require("express-domain-middleware");
 
 interface Secret {

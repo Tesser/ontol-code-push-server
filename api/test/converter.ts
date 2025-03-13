@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 
 import * as assert from "assert";
-import * as converter from "../script/utils/converter";
+import * as storageTypes from "../script/infrastructure/storage";
 import * as redis from "../script/redis-manager";
-import * as storageTypes from "../script/storage/storage";
 import { Account, App, Deployment, DeploymentMetrics, Package } from "../script/types/rest-definitions";
+import * as converter from "../script/utils/converter";
 import * as testUtils from "./utils";
 
 describe("Converter", () => {

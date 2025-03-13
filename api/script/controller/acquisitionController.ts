@@ -4,14 +4,14 @@
 import * as express from "express";
 import * as semver from "semver";
 
-import * as utils from "../utils/common";
-import * as acquisitionUtils from "../utils/acquisition";
-import * as errorUtils from "../utils/rest-error-handling";
+import * as storageTypes from "../infrastructure/storage";
 import * as redis from "../redis-manager";
+import { UpdateCheckCacheResponse, UpdateCheckRequest, UpdateCheckResponse } from "../types/rest-definitions";
+import * as acquisitionUtils from "../utils/acquisition";
+import * as utils from "../utils/common";
+import * as errorUtils from "../utils/rest-error-handling";
 import * as restHeaders from "../utils/rest-headers";
 import * as rolloutSelector from "../utils/rollout-selector";
-import * as storageTypes from "../storage/storage";
-import { UpdateCheckCacheResponse, UpdateCheckRequest, UpdateCheckResponse } from "../types/rest-definitions";
 import * as validationUtils from "../utils/validation";
 
 import * as q from "q";

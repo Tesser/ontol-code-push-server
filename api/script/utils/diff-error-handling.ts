@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import * as errorModule from "../error";
-import * as storageTypes from "../storage/storage";
+import * as storageTypes from "../infrastructure/storage";
 
 export enum ErrorCode {
   InvalidArguments = 0,
