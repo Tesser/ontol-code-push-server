@@ -7,8 +7,8 @@ import * as http from "http";
 import * as q from "q";
 import * as stream from "stream";
 
-import * as storage from "./storage";
-import { isPrototypePollutionKey } from "./storage";
+import * as storage from "../storage";
+import { isPrototypePollutionKey } from "../storage";
 
 import clone = storage.clone;
 import Promise = q.Promise;

@@ -1,20 +1,20 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import * as diffErrorUtils from "./diff-error-handling";
-import * as env from "../environment";
 import * as fs from "fs";
-import * as hashUtils from "../utils/hash-utils";
 import * as path from "path";
 import * as q from "q";
-import * as security from "../utils/security";
 import * as semver from "semver";
-import * as storageTypes from "../storage/storage";
 import * as stream from "stream";
 import * as streamifier from "streamifier";
 import * as superagent from "superagent";
-import * as yazl from "yazl";
 import * as yauzl from "yauzl";
+import * as yazl from "yazl";
+import * as env from "../environment";
+import * as storageTypes from "../infrastructure/storage";
+import * as hashUtils from "../utils/hash-utils";
+import * as security from "../utils/security";
+import * as diffErrorUtils from "./diff-error-handling";
 import PackageManifest = hashUtils.PackageManifest;
 import Promise = q.Promise;
 import request = require("superagent");

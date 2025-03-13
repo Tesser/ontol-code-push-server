@@ -1,22 +1,22 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { AzureStorage } from "../script/storage/azure-storage";
-import { JsonStorage } from "../script/storage/json-storage";
 import * as assert from "assert";
-import * as diffErrorUtils from "../script/utils/diff-error-handling";
 import * as express from "express";
 import * as fs from "fs";
-import * as hashUtils from "../script/utils/hash-utils";
 import * as http from "http";
-import * as packageDiffing from "../script/utils/package-diffing";
 import * as path from "path";
 import * as q from "q";
 import * as shortid from "shortid";
-import * as storage from "../script/storage/storage";
 import * as stream from "stream";
-import * as utils from "./utils";
 import * as yauzl from "yauzl";
+import * as storage from "../script/infrastructure/storage";
+import { AzureStorage } from "../script/infrastructure/storage/azure-storage";
+import { JsonStorage } from "../script/infrastructure/storage/json-storage";
+import * as diffErrorUtils from "../script/utils/diff-error-handling";
+import * as hashUtils from "../script/utils/hash-utils";
+import * as packageDiffing from "../script/utils/package-diffing";
+import * as utils from "./utils";
 import clone = storage.clone;
 import PackageDiffer = packageDiffing.PackageDiffer;
 import PackageManifest = hashUtils.PackageManifest;

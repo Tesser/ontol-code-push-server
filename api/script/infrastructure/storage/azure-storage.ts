@@ -4,8 +4,8 @@
 import * as q from "q";
 import * as shortid from "shortid";
 import * as stream from "stream";
-import * as utils from "../utils/common";
-import * as storage from "./storage";
+import * as utils from "../../utils/common";
+import * as storage from "../storage";
 
 import {
   AzureNamedKeyCredential,
@@ -18,7 +18,7 @@ import {
   TransactionAction,
 } from "@azure/data-tables";
 import { BlobServiceClient, StorageSharedKeyCredential } from "@azure/storage-blob";
-import { isPrototypePollutionKey } from "./storage";
+import { isPrototypePollutionKey } from "../storage";
 
 /**
  * 애플리케이션, 계정, 배포의 키를 생성합니다.

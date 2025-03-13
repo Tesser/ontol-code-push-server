@@ -1,10 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { ALLOWED_KEY_CHARACTERS_TEST } from "./security";
-import * as storageTypes from "../storage/storage";
-import * as restTypes from "../types/rest-definitions";
 import * as semver from "semver";
+import * as storageTypes from "../infrastructure/storage";
+import * as restTypes from "../types/rest-definitions";
+import { ALLOWED_KEY_CHARACTERS_TEST } from "./security";
 
 import emailValidator = require("email-validator");
 

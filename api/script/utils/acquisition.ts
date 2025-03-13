@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 import * as semver from "semver";
+import { Package } from "../infrastructure/storage";
 import { UpdateCheckCacheResponse, UpdateCheckRequest, UpdateCheckResponse } from "../types/rest-definitions";
-import { Package } from "../storage/storage";
 import { isUnfinishedRollout } from "./rollout-selector";
 
 interface UpdatePackage {

@@ -4,9 +4,9 @@
 import * as express from "express";
 
 import * as errorModule from "../error";
-import * as storageTypes from "../storage/storage";
-import * as passportAuthentication from "../routes/passport-authentication";
-import { AppInsights } from "../routes/app-insights";
+import * as storageTypes from "../infrastructure/storage";
+import { AppInsights } from "../services/app-insights";
+import * as passportAuthentication from "../services/passport-authentication";
 
 const sanitizeHtml = require("sanitize-html");
 
