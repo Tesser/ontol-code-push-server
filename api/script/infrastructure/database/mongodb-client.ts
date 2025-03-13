@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { Collection, Db, MongoClient } from "mongodb";
+import mongoose from "mongoose";
 import * as q from "q";
 import * as storage from "../storage";
 import { AccessKey, Account, App, Deployment } from "../storage";
@@ -18,6 +19,7 @@ export interface MongoDBConnection {
     accessKeys: Collection<AccessKey>;
     accessKeyPointers: Collection;
   };
+  mongoose?: typeof mongoose;
 }
 
 export class MongoDBClient {
@@ -54,14 +56,16 @@ export class MongoDBClient {
               accessKeyPointers: db.collection("accessKeyPointers"),
             },
           };
-
-          // 필요한 인덱스를 생성합니다.
-          return q.all([
-            this._connection.collections.accounts.createIndex({ email: 1 }, { unique: true }),
-            this._connection.collections.apps.createIndex({ "collaborators.email": 1 }),
-            this._connection.collections.deployments.createIndex({ key: 1 }, { unique: true }),
-            this._connection.collections.accessKeyPointers.createIndex({ name: 1 }, { unique: true }),
-          ]);
+          // Mongoose 연결 설정
+          return this.setupMongoose(mongoUrl).then(() => {
+            // 필요한 인덱스를 생성합니다.
+            return q.all([
+              this._connection.collections.accounts.createIndex({ email: 1 }, { unique: true }),
+              this._connection.collections.apps.createIndex({ "collaborators.email": 1 }),
+              this._connection.collections.deployments.createIndex({ key: 1 }, { unique: true }),
+              this._connection.collections.accessKeyPointers.createIndex({ name: 1 }, { unique: true }),
+            ]);
+          });
         })
         .then(() => {
           resolve();
@@ -71,6 +75,55 @@ export class MongoDBClient {
           reject(error);
         });
     });
+  }
+  /**
+   * Mongoose 연결을 설정합니다.
+   * @param mongoUrl MongoDB 연결 URL
+   * @returns 설정 완료 Promise
+   */
+  private setupMongoose(mongoUrl: string): q.Promise<void> {
+    return q.Promise<void>((resolve, reject) => {
+      // Mongoose 연결 옵션 설정
+      const mongooseOptions = {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        autoIndex: true,
+      };
+
+      // Mongoose 연결 이벤트 핸들러 설정
+      mongoose.connection.on("connected", () => {
+        console.log("✅ Mongoose가 MongoDB에 연결되었습니다.");
+      });
+
+      mongoose.connection.on("error", (err) => {
+        console.error("🔴 Mongoose 연결 오류:", err);
+      });
+
+      mongoose.connection.on("disconnected", () => {
+        console.log("⚠️ Mongoose 연결이 끊어졌습니다.");
+      });
+
+      // Mongoose 연결 시도
+      mongoose
+        .connect(mongoUrl, mongooseOptions)
+        .then(() => {
+          // 연결 성공 시 Mongoose 인스턴스를 connection 객체에 저장
+          this._connection.mongoose = mongoose;
+          resolve();
+        })
+        .catch((error) => {
+          console.error("🔴 Mongoose 연결 실패:", error);
+          reject(error);
+        });
+    });
+  }
+
+  /**
+   * Mongoose 인스턴스를 반환합니다.
+   * @returns Mongoose 인스턴스
+   */
+  public getMongoose(): typeof mongoose | undefined {
+    return this._connection?.mongoose;
   }
 
   /**
@@ -658,17 +711,30 @@ export class MongoDBClient {
    * @returns 완료 Promise
    */
   public close(): q.Promise<void> {
-    if (this._connection && this._connection.client) {
+    if (this._connection) {
       return q.Promise<void>((resolve) => {
-        this._connection.client
-          .close()
+        const closePromises = [];
+
+        // MongoDB 클라이언트 연결 종료
+        if (this._connection.client) {
+          closePromises.push(this._connection.client.close());
+        }
+
+        // Mongoose 연결 종료
+        if (this._connection.mongoose) {
+          closePromises.push(this._connection.mongoose.connection.close());
+        }
+
+        Promise.all(closePromises)
           .then(() => resolve())
-          .catch(() => resolve()); // 에러가 발생해도 무시
+          .catch((error) => {
+            console.warn("⚠️ 데이터베이스 연결 종료 중 오류 발생:", error);
+            resolve();
+          });
       });
     }
     return q(<void>null);
   }
-
   /**
    * MongoDB 연결 객체를 반환합니다.
    * @returns MongoDB 연결 객체
