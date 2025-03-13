@@ -174,10 +174,10 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
           keyvaultClient
             .getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`)
             .then((secret: any) => {
-              return (<AzureStorage>storage).reinitialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
+              return (<AzureStorage>storage).initialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
             })
             .catch((error: Error) => {
-              console.error("Failed to reinitialize storage from Key Vault credentials");
+              console.error("Failed to initialize storage from Key Vault credentials");
               appInsights.errorHandler(error);
             })
             .done();
