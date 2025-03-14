@@ -57,6 +57,11 @@ export function restErrorHandler(res: express.Response, error: errorModule.CodeP
   }
 }
 
+/**
+ * 잘못된 요청 오류를 보내는 함수입니다.
+ * @param res 응답 객체
+ * @param message 오류 메시지
+ */
 export function sendMalformedRequestError(res: express.Response, message: string): void {
   if (message) {
     res.status(400).send(sanitizeHtml(message));

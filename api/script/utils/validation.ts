@@ -9,6 +9,12 @@ import { ALLOWED_KEY_CHARACTERS_TEST } from "./security";
 import emailValidator = require("email-validator");
 
 module Validation {
+  /**
+   * 문자열 유효성 검사 함수를 반환합니다.
+   * @param maxLength 최대 길이
+   * @param minLength 최소 길이
+   * @returns 유효성 검사 결과
+   */
   function getStringValidator(maxLength: number = 1000, minLength: number = 0): (value: any) => boolean {
     return function isValidString(value: string): boolean {
       if (typeof value !== "string") {
@@ -27,16 +33,31 @@ module Validation {
     return appVersion && semver.valid(appVersion) !== null;
   }
 
+  /**
+   * 앱 버전 범위의 유효성을 검사합니다.
+   * @param appVersion 앱 버전
+   * @returns 유효성 검사 결과
+   */
   function isValidAppVersionRangeField(appVersion: any): boolean {
     return !!semver.validRange(appVersion);
   }
 
+  /**
+   * 불리언 필드의 유효성을 검사합니다.
+   * @param val 불리언 값
+   * @returns 유효성 검사 결과
+   */
   function isValidBooleanField(val: any): boolean {
     return typeof val === "boolean";
   }
 
+  /**
+   * 레이블 필드의 유효성을 검사합니다.
+   * @param val 레이블
+   * @returns 유효성 검사 결과
+   */
   function isValidLabelField(val: any): boolean {
-    return val && val.match(/^v[1-9][0-9]*$/) !== null; //validates if label field confirms to 'v1-v9999...' standard
+    return val && val.match(/^v[1-9][0-9]*$/) !== null; //레이블 필드가 'v1-v9999...' 표준을 따르는지 검사합니다.
   }
 
   function isValidEmailField(email: any): boolean {
@@ -70,11 +91,21 @@ module Validation {
     ); // Forbid colon because we use it as a delimiter for qualified app names
   }
 
+  /**
+   * 롤아웃 필드의 유효성을 검사합니다.
+   * @param rollout 롤아웃
+   * @returns 유효성 검사 결과
+   */
   export function isValidRolloutField(rollout: any): boolean {
-    // rollout is an optional field, or when defined should be a number between 1-100.
+    // rollout은 선택적 필드이며, 정의된 경우 1-100 사이의 숫자여야 합니다.
     return /^(100|[1-9][0-9]|[1-9])$/.test(rollout);
   }
 
+  /**
+   * 설명 필드의 유효성을 검사합니다.
+   * @param description 설명
+   * @returns 유효성 검사 결과
+   */
   const isValidDescriptionField = getStringValidator(/*maxLength=*/ 10000);
   const isValidFriendlyNameField = getStringValidator(/*maxLength=*/ 10000, /*minLength*/ 1);
 
@@ -157,6 +188,12 @@ module Validation {
     return validate(deployment, fields, requiredFields);
   }
 
+  /**
+   * 패키지 정보의 유효성을 검사합니다.
+   * @param packageInfo 패키지 정보
+   * @param allOptional 모든 필드가 선택적인지 여부
+   * @returns 유효성 검사 결과
+   */
   export function validatePackageInfo(packageInfo: restTypes.PackageInfo, allOptional: boolean): ValidationError[] {
     const fields: FieldDefinition = {
       appVersion: isValidAppVersionRangeField,

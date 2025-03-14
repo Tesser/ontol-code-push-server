@@ -200,7 +200,7 @@ export interface Storage {
   updateDeployment(accountId: string, appId: string, deployment: Deployment): Promise<void>;
 
   // 패키지 커밋, 이력 조회 및 삭제
-  commitPackage(accountId: string, appId: string, deploymentId: string, appPackage: Package): Promise<Package>;
+  commitPackage(accountId: string, appId: string, deploymentKey: string, appPackage: Package): Promise<Package>;
   clearPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<void>;
   getPackageHistoryFromDeploymentKey(deploymentKey: string): Promise<Package[]>;
   getPackageHistory(accountId: string, appId: string, deploymentId: string): Promise<Package[]>;

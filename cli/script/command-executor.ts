@@ -3,26 +3,13 @@
 
 import AccountManager = require("./management-sdk");
 const childProcess = require("child_process");
-import debugCommand from "./commands/debug";
-import * as fs from "fs";
 import * as chalk from "chalk";
-const g2js = require("gradle-to-js/lib/parser");
+import * as fs from "fs";
 import * as moment from "moment";
-const opener = require("opener");
 import * as os from "os";
 import * as path from "path";
-const plist = require("plist");
-const progress = require("progress");
-const prompt = require("prompt");
 import * as Q from "q";
-const rimraf = require("rimraf");
 import * as semver from "semver";
-const Table = require("cli-table");
-const which = require("which");
-import wordwrap = require("wordwrap");
-import * as cli from "../script/types/cli";
-import sign from "./sign";
-const xcode = require("xcode");
 import {
   AccessKey,
   Account,
@@ -38,17 +25,30 @@ import {
   Session,
   UpdateMetrics,
 } from "../script/types";
+import * as cli from "../script/types/cli";
+import debugCommand from "./commands/debug";
 import {
   getAndroidHermesEnabled,
   getiOSHermesEnabled,
-  runHermesEmitBinaryCommand,
-  isValidVersion
+  isValidVersion,
+  runHermesEmitBinaryCommand
 } from "./react-native-utils";
+import sign from "./sign";
 import {
   fileDoesNotExistOrIsDirectory,
-  isBinaryOrZip,
-  fileExists
+  fileExists,
+  isBinaryOrZip
 } from "./utils/file-utils";
+const g2js = require("gradle-to-js/lib/parser");
+const opener = require("opener");
+const plist = require("plist");
+const progress = require("progress");
+const prompt = require("prompt");
+const rimraf = require("rimraf");
+const Table = require("cli-table");
+const which = require("which");
+import wordwrap = require("wordwrap");
+const xcode = require("xcode");
 
 const configFilePath: string = path.join(process.env.LOCALAPPDATA || process.env.HOME, ".code-push.config");
 const emailValidator = require("email-validator");
@@ -82,6 +82,10 @@ export interface PackageWithMetrics {
 
 export const log = (message: string | any): void => console.log(message);
 export let sdk: AccountManager;
+/**
+ * - 새로운 프로세스를 생성합니다.
+ * - 새로운 명령어나 프로그램을 별도의 프로세스로 실행합니다.
+ */
 export const spawn = childProcess.spawn;
 export const execSync = childProcess.execSync;
 
@@ -857,21 +861,27 @@ function getPackageMetricsString(obj: Package): string {
   return returnString;
 }
 
+/**
+ * React Native 프로젝트의 앱 버전을 검색합니다.
+ * @param command - 명령어 객체
+ * @param projectName - 프로젝트 이름
+ * @returns Promise<string> - 앱 버전
+ */
 function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, projectName: string): Promise<string> {
   log(chalk.cyan(`Detecting ${command.platform} app version:\n`));
 
+  // ios 환경
   if (command.platform === "ios") {
     let resolvedPlistFile: string = command.plistFile;
     if (resolvedPlistFile) {
-      // If a plist file path is explicitly provided, then we don't
-      // need to attempt to "resolve" it within the well-known locations.
+      // 명시적으로 제공된 plist 파일 경로가 있는 경우, 해당 경로를 사용합니다.
       if (!fileExists(resolvedPlistFile)) {
         throw new Error("The specified plist file doesn't exist. Please check that the provided path is correct.");
       }
     } else {
-      // Allow the plist prefix to be specified with or without a trailing
-      // separator character, but prescribe the use of a hyphen when omitted,
-      // since this is the most commonly used convetion for plist files.
+      // 명시적으로 제공된 plist 파일 경로가 없는 경우, 일반적인 위치(ios/[프로젝트명]/Info.plist 또는 ios/Info.plist)에서 plist 파일을 검색합니다.
+      // plist 파일 이름은 Info.plist 이며, 파일 이름 앞에 접두사를 붙일 수 있습니다.
+      // 접두사는 선택적으로 하이픈(-)을 포함할 수 있습니다.
       if (command.plistFilePrefix && /.+[^-.]$/.test(command.plistFilePrefix)) {
         command.plistFilePrefix += "-";
       }
@@ -902,35 +912,46 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
       throw new Error(`Unable to parse "${resolvedPlistFile}". Please ensure it is a well-formed plist file.`);
     }
 
+    // plist 파일의 CFBundleShortVersionString 키에서 버전 값을 추출합니다.
     if (parsedPlist && parsedPlist.CFBundleShortVersionString) {
+      // 버전 값이 유효한 Semver 형식인지 확인합니다.
       if (isValidVersion(parsedPlist.CFBundleShortVersionString)) {
         log(`Using the target binary version value "${parsedPlist.CFBundleShortVersionString}" from "${resolvedPlistFile}".\n`);
         return Q(parsedPlist.CFBundleShortVersionString);
       } else {
+        // 버전 값이 유효한 Semver 형식이 아닌 경우, 오류를 발생시킵니다.
         if (parsedPlist.CFBundleShortVersionString !== "$(MARKETING_VERSION)") {
           throw new Error(
             `The "CFBundleShortVersionString" key in the "${resolvedPlistFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
           );
         }
 
+        // $(MARKETING_VERSION) 값인 경우 Xcode 프로젝트에서 앱 버전을 검색합니다.
         return getAppVersionFromXcodeProject(command, projectName);
       }
     } else {
       throw new Error(`The "CFBundleShortVersionString" key doesn't exist within the "${resolvedPlistFile}" file.`);
     }
-  } else if (command.platform === "android") {
+  } 
+  // android 환경
+  else if (command.platform === "android") {
+    // 명시적으로 제공된 gradle 파일 경로가 있는 경우, 해당 경로를 사용합니다.
+    // 기본적으로 android/app/build.gradle을 사용합니다.
     let buildGradlePath: string = path.join("android", "app");
     if (command.gradleFile) {
       buildGradlePath = command.gradleFile;
     }
+    // gradle 파일이 디렉토리인 경우, build.gradle 파일을 검색합니다.
     if (fs.lstatSync(buildGradlePath).isDirectory()) {
       buildGradlePath = path.join(buildGradlePath, "build.gradle");
     }
 
+    // gradle 파일이 존재하지 않는 경우, 오류를 발생시킵니다.
     if (fileDoesNotExistOrIsDirectory(buildGradlePath)) {
       throw new Error(`Unable to find gradle file "${buildGradlePath}".`);
     }
 
+    // gradle 파일을 파싱합니다.
     return g2js
       .parseFile(buildGradlePath)
       .catch(() => {
@@ -939,10 +960,8 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
       .then((buildGradle: any) => {
         let versionName: string = null;
 
-        // First 'if' statement was implemented as workaround for case
-        // when 'build.gradle' file contains several 'android' nodes.
-        // In this case 'buildGradle.android' prop represents array instead of object
-        // due to parsing issue in 'g2js.parseFile' method.
+        // gradle 파일에 android 노드가 여러 개인 경우, 첫 번째 android 노드를 사용합니다.
+        // android.defaultConfig.versionName 키에서 버전 값을 추출합니다.
         if (buildGradle.android instanceof Array) {
           for (let i = 0; i < buildGradle.android.length; i++) {
             const gradlePart = buildGradle.android[i];
@@ -967,28 +986,24 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
 
         let appVersion: string = versionName.replace(/"/g, "").trim();
 
+        // 버전 값이 유효한 Semver 형식인지 확인합니다.
         if (isValidVersion(appVersion)) {
-          // The versionName property is a valid semver string,
-          // so we can safely use that and move on.
+          // 버전 값이 유효한 Semver 형식인 경우, 해당 값을 사용합니다.
           log(`Using the target binary version value "${appVersion}" from "${buildGradlePath}".\n`);
           return appVersion;
         } else if (/^\d.*/.test(appVersion)) {
-          // The versionName property isn't a valid semver string,
-          // but it starts with a number, and therefore, it can't
-          // be a valid Gradle property reference.
+          // 버전 값이 유효한 Semver 형식이 아니며, 숫자로 시작하는 경우, 오류를 발생시킵니다.
           throw new Error(
             `The "android.defaultConfig.versionName" property in the "${buildGradlePath}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
           );
         }
 
-        // The version property isn't a valid semver string
-        // so we assume it is a reference to a property variable.
+        // 버전 값이 속성 참조인 경우(예: project.version), gradle.properties 파일에서 실제 값을 검색합니다.
         const propertyName = appVersion.replace("project.", "");
         const propertiesFileName = "gradle.properties";
 
         const knownLocations = [path.join("android", "app", propertiesFileName), path.join("android", propertiesFileName)];
 
-        // Search for gradle properties across all `gradle.properties` files
         let propertiesFile: string = null;
         for (let i = 0; i < knownLocations.length; i++) {
           propertiesFile = knownLocations[i];
@@ -1020,6 +1035,7 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
         return appVersion.toString();
       });
   } else {
+    // Window 플랫폼 처리
     const appxManifestFileName: string = "Package.appxmanifest";
     let appxManifestContainingFolder: string;
     let appxManifestContents: string;
@@ -1049,12 +1065,19 @@ function getReactNativeProjectAppVersion(command: cli.IReleaseReactCommand, proj
   }
 }
 
+/**
+ * Xcode 프로젝트 파일에서 iOS 앱의 버전 정보를 추출합니다.
+ * @param command - 명령어 객체
+ * @param projectName - 프로젝트 이름
+ * @returns Promise<string> - 앱 버전
+ */
 function getAppVersionFromXcodeProject(command: cli.IReleaseReactCommand, projectName: string): Promise<string> {
   const pbxprojFileName = "project.pbxproj";
   let resolvedPbxprojFile: string = command.xcodeProjectFile;
   if (resolvedPbxprojFile) {
-    // If the xcode project file path is explicitly provided, then we don't
-    // need to attempt to "resolve" it within the well-known locations.
+    // 명시적으로 제공된 pbxproj 파일 경로가 있는 경우, 해당 경로를 사용합니다.
+    // 제공된 경로가 pbxproj 파일인지 확인합니다.
+    // 경로가 .pbxproj로 끝나지 않으면 해당 경로 내에서 pbxproj 파일 경로를 구성합니다.
     if (!resolvedPbxprojFile.endsWith(pbxprojFileName)) {
       // Specify path to pbxproj file if the provided file path is an Xcode project file.
       resolvedPbxprojFile = path.join(resolvedPbxprojFile, pbxprojFileName);
@@ -1063,6 +1086,8 @@ function getAppVersionFromXcodeProject(command: cli.IReleaseReactCommand, projec
       throw new Error("The specified pbx project file doesn't exist. Please check that the provided path is correct.");
     }
   } else {
+    // 명시적인 경로가 없는 경우 일반적인 위치에서 파일을 검색합니다.
+    // 기본적으로 ios/[프로젝트명].xcodeproj/project.pbxproj 또는 ios/project.pbxproj 파일을 검색합니다.
     const iOSDirectory = "ios";
     const xcodeprojDirectory = `${projectName}.xcodeproj`;
     const pbxprojKnownLocations = [
@@ -1080,12 +1105,16 @@ function getAppVersionFromXcodeProject(command: cli.IReleaseReactCommand, projec
     }
   }
 
+  // pbxproj 파일을 파싱합니다.
   const xcodeProj = xcode.project(resolvedPbxprojFile).parseSync();
+  // getBuildProperty 메서드를 사용하여 MARKETING_VERSION 속성 값을 추출합니다.
+  // 지정된 빌드 구성(buildConfigurationName)과 타겟(xcodeTargetName)에 대한 값을 가져옵니다.
   const marketingVersion = xcodeProj.getBuildProperty(
     "MARKETING_VERSION",
     command.buildConfigurationName,
     command.xcodeTargetName
   );
+  // 버전 값이 유효한 Semver 형식인지 확인합니다.
   if (!isValidVersion(marketingVersion)) {
     throw new Error(
       `The "MARKETING_VERSION" key in the "${resolvedPbxprojFile}" file needs to specify a valid semver string, containing both a major and minor version (e.g. 1.3.2, 1.1).`
@@ -1206,21 +1235,45 @@ function patch(command: cli.IPatchCommand): Promise<void> {
   throw new Error("At least one property must be specified to patch a release.");
 }
 
+/**
+ * 번들링된 파일을 CodePush 서버에 배포합니다.
+ * @param command 
+ * ```
+ * {
+ *  appName: string;
+ *  appStoreVersion: string;
+ *  deploymentName: string;
+ *  noDuplicateReleaseError?: boolean;
+ *  privateKeyPath?: string;
+ *  package: string;
+ * }
+ * ```
+ * @returns Promise<void>
+ */
 export const release = (command: cli.IReleaseCommand): Promise<void> => {
+  // 패키지 파일이 .zip 또는 이진 파일인 경우 오류를 발생시킵니다.
+  // 이러한 파일은 이미 번들링된 파일이므로 추가적인 패키징이 필요하지 않습니다.
+  console.log('🥹 CLI Release [1]', command.package);
   if (isBinaryOrZip(command.package)) {
     throw new Error(
       "It is unnecessary to package releases in a .zip or binary file. Please specify the direct path to the update content's directory (e.g. /platforms/ios/www) or file (e.g. main.jsbundle)."
     );
   }
 
+  // 앱 버전이 유효한 Semver 형식인지 확인합니다.
+  console.log('🥹 CLI Release [2]', command.appStoreVersion);
   throwForInvalidSemverRange(command.appStoreVersion);
+
+  // 패키지 유형을 확인합니다.
+  // 패키지가 단일 파일인지 디렉토리인지 확인합니다.
   const filePath: string = command.package;
   let isSingleFilePackage: boolean = true;
-
+  console.log('🥹 CLI Release [3]', filePath);
   if (fs.lstatSync(filePath).isDirectory()) {
     isSingleFilePackage = false;
   }
 
+  // 업로드 진행 상황을 표시하기 위한 진행 표시줄을 설정합니다.
   let lastTotalProgress = 0;
   const progressBar = new progress("Upload progress:[:bar] :percent :etas", {
     complete: "=",
@@ -1228,22 +1281,25 @@ export const release = (command: cli.IReleaseCommand): Promise<void> => {
     width: 50,
     total: 100,
   });
-
+  console.log('🥹 CLI Release [4]', progressBar);
+  // 업데이트에 대한 메타데이터를 설정합니다.
   const uploadProgress = (currentProgress: number): void => {
     progressBar.tick(currentProgress - lastTotalProgress);
     lastTotalProgress = currentProgress;
   };
-
+  console.log('🥹 CLI Release [5]', uploadProgress);
   const updateMetadata: PackageInfo = {
-    description: command.description,
-    isDisabled: command.disabled,
-    isMandatory: command.mandatory,
-    rollout: command.rollout,
+    description: command.description, // 업데이트에 대한 설명
+    isDisabled: command.disabled, // 업데이트 비활성화 여부
+    isMandatory: command.mandatory, // 업데이트 강제 설치 여부
+    rollout: command.rollout, // 점진적 배포 비율
   };
-
+  console.log('🥹 CLI Release [6]', updateMetadata);
+  // 인증 상태를 확인하고 인증된 경우 업데이트를 배포합니다.
   return sdk
     .isAuthenticated(true)
     .then((isAuth: boolean): Promise<void> => {
+      console.log('🥹 CLI Release [7]', isAuth);
       return sdk.release(command.appName, command.deploymentName, filePath, command.appStoreVersion, updateMetadata, uploadProgress);
     })
     .then((): void => {
@@ -1262,20 +1318,50 @@ export const release = (command: cli.IReleaseCommand): Promise<void> => {
     .catch((err: CodePushError) => releaseErrorHandler(err, command));
 };
 
+
+/**
+ * React Native 앱의 업데이트를 CodePush 서버에 배포합니다.
+ * @param command 
+ * ```
+ * {
+ *  bundleName?: string;
+ *  development?: boolean;
+ *  entryFile?: string;
+ *  gradleFile?: string;
+ *  platform: string;
+ *  plistFile?: string;
+ *  plistFilePrefix?: string;
+ *  sourcemapOutput?: string;
+ *  outputDir?: string;
+ *  config?: string;
+ *  useHermes?: boolean;
+ *  extraHermesFlags?: string[];
+ *  podFile?: string;
+ *  xcodeProjectFile?: string;
+ *  xcodeTargetName?: string;
+ *  buildConfigurationName?: string;
+ * }
+ * ```
+ * @returns 
+ */
 export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> => {
   let bundleName: string = command.bundleName;
   let entryFile: string = command.entryFile;
   const outputFolder: string = command.outputDir || path.join(os.tmpdir(), "CodePush");
   const platform: string = (command.platform = command.platform.toLowerCase());
   const releaseCommand: cli.IReleaseCommand = <any>command;
-  // Check for app and deployment exist before releasing an update.
-  // This validation helps to save about 1 minute or more in case user has typed wrong app or deployment name.
+  // 업데이트 배포 전 앱과 배포 환경의 존재 여부를 확인합니다.
+  // 잘못된 앱 이름이나 배포 환경 이름을 입력하지는 않았는지 초기에 검증합니다.
   return (
     sdk
       .getDeployment(command.appName, command.deploymentName)
       .then((): any => {
+        console.log("🤔 CLI ReleaseReact: ", command.appName, command.deploymentName);
         releaseCommand.package = outputFolder;
-
+        // 플랫폼 타입에 따라 번들 이름을 설정합니다.
+        // iOS: main.jsbundle
+        // Android: index.android.bundle
+        // Windows: index.windows.bundle
         switch (platform) {
           case "android":
           case "ios":
@@ -1288,10 +1374,13 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           default:
             throw new Error('Platform must be either "android", "ios" or "windows".');
         }
-
+        console.log("🤔 CLI ReleaseReact[2]: ", bundleName);
         let projectName: string;
-
+        
+        // 프로젝트 유효성을 검증합니다.  
+        // package.json 파일에 앱 이름과 react-native 모듈이 존재하는지 확인합니다.
         try {
+          console.log("🤔 CLI ReleaseReact[3]: ", path.join(process.cwd(), "package.json"));
           const projectPackageJson: any = require(path.join(process.cwd(), "package.json"));
           projectName = projectPackageJson.name;
           if (!projectName) {
@@ -1307,21 +1396,31 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           );
         }
 
+        // 진입점 파일이 지정되지 않았다면, 플랫폼 타입에 따라 엔트리 파일을 설정합니다.
         if (!entryFile) {
+          console.log("🤔 CLI ReleaseReact[4]: ", `index.${platform}.js`);
           entryFile = `index.${platform}.js`;
           if (fileDoesNotExistOrIsDirectory(entryFile)) {
+            console.log("🤔 CLI ReleaseReact[5]: ", "index.js");
             entryFile = "index.js";
           }
 
           if (fileDoesNotExistOrIsDirectory(entryFile)) {
+            console.log("🤔 CLI ReleaseReact[6]: ", `Entry file "index.${platform}.js" or "index.js" does not exist.`);
             throw new Error(`Entry file "index.${platform}.js" or "index.js" does not exist.`);
           }
         } else {
           if (fileDoesNotExistOrIsDirectory(entryFile)) {
+            console.log("🤔 CLI ReleaseReact[7]: ", `Entry file "${entryFile}" does not exist.`);
             throw new Error(`Entry file "${entryFile}" does not exist.`);
           }
         }
 
+        // 앱 버전을 결정합니다.
+        // 사용자가 --targetBinaryVersion 옵션을 사용하여 명시적으로 버전을 지정했다면, 해당 버전을 사용합니다.
+        // 지정된 버전이 없다면, 프로젝트 내에서 사용되는 버전을 찾습니다. 
+        // (Android: build.gradle의 versionCode, iOS: Info.plist 또는 XCode 프로젝트의 CFBundleShortVersionString 필드)
+        console.log("🤔 CLI ReleaseReact[8]: ", command.appStoreVersion);
         const appVersionPromise: Promise<string> = command.appStoreVersion
           ? Q(command.appStoreVersion)
           : getReactNativeProjectAppVersion(command, projectName);
@@ -1332,17 +1431,24 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
 
         return appVersionPromise;
       })
+      // 임시 폴더를 생성하고 번들러 캐시를 정리합니다.
+      // 앱 버전이 유효한 Semver 형식인지 확인 후 임시 출력 폴더를 생성합니다.
       .then((appVersion: string) => {
+        console.log("🤔 CLI ReleaseReact[9]: ", appVersion);
         throwForInvalidSemverRange(appVersion);
         releaseCommand.appStoreVersion = appVersion;
-
+        
         return createEmptyTempReleaseFolder(outputFolder);
       })
-      // This is needed to clear the react native bundler cache:
-      // https://github.com/facebook/react-native/issues/4289
+      // React Native 번들러 캐시를 정리하여 성능 및 오류를 방지합니다.
+
       .then(() => deleteFolder(`${os.tmpdir()}/react-*`))
-      .then(() =>
-        runReactNativeBundleCommand(
+      // React Native 번들링을 실행합니다.
+      // Metro 번들러를 사용하여 JavaScript 코드를 번들링합니다.
+      // 이때 개발 모드 여부, 소스맵 생성 여부 등의 옵션을 적용합니다.
+      .then(() => {
+        console.log("🤔 CLI ReleaseReact[10]: ", bundleName);
+        return runReactNativeBundleCommand(
           bundleName,
           command.development || false,
           entryFile,
@@ -1350,12 +1456,17 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           platform,
           command.sourcemapOutput
         )
-      )
+      })
+      // Hermes 컴파일러를 실행합니다.
+      // Hermes는 JavaScript 코드를 바이트 코드로 컴파일하는 역할을 합니다.
+      // Hermes 활성화 여부를 확인하고, 필요한 경우 JavaScript 번들을 Hermes 바이트코드로 변환합니다.
+      // 활성화 확인: --useHermes 옵션, build.gradle, Podfile
       .then(async () => {
+        console.log("🤔 CLI ReleaseReact[11]: ", command.useHermes);
         const isHermesEnabled =
         command.useHermes ||
-        (platform === "android" && (await getAndroidHermesEnabled(command.gradleFile))) || // Check if we have to run hermes to compile JS to Byte Code if Hermes is enabled in build.gradle and we're releasing an Android build
-        (platform === "ios" && (await getiOSHermesEnabled(command.podFile))); // Check if we have to run hermes to compile JS to Byte Code if Hermes is enabled in Podfile and we're releasing an iOS build
+        (platform === "android" && (await getAndroidHermesEnabled(command.gradleFile))) || // build.gradle에서 Hermes 활성화 여부 확인
+        (platform === "ios" && (await getiOSHermesEnabled(command.podFile))); // Podfile에서 Hermes 활성화 여부 확인
 
         if (isHermesEnabled) {
           log(chalk.cyan("\nRunning hermes compiler...\n"));
@@ -1368,7 +1479,11 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           );
         }
       })
+      // --privateKeyPath 옵션이 제공된 경우 번들 서명을 실행합니다.
+      // 번들 서명은 번들의 무결성을 보장하고, 번들의 소유권을 증명하는 데 사용됩니다.
+      // 서명 키 경로가 지정되지 않았다면, 서명 키를 생성하고 저장합니다.
       .then(async () => {
+        console.log("🤔 CLI ReleaseReact[12]: ", command.privateKeyPath);
         if (command.privateKeyPath) {
           log(chalk.cyan("\nSigning the bundle:\n"));
           await sign(command.privateKeyPath, outputFolder);
@@ -1376,11 +1491,17 @@ export const releaseReact = (command: cli.IReleaseReactCommand): Promise<void> =
           console.log("private key was not provided");
         }
       })
+      // 번들 업데이트를 CodePush 서버에 배포합니다.
+      // AccountManager 클래스의 release 메서드를 호출하여 번들링된 파일과 메타데이터를 업로드합니다.
       .then(() => {
+        console.log("🤔 CLI ReleaseReact[13]: ", releaseCommand);
         log(chalk.cyan("\nReleasing update contents to CodePush:\n"));
         return release(releaseCommand);
       })
+      // 사용자가 출력 디렉토리를 지정하지 않은 경우 해당 폴더를 삭제합니다.
+      // 오류가 발생한 경우에도 임시 폴더를 정리합니다.
       .then(() => {
+        console.log("🤔 CLI ReleaseReact[14]: ", command.outputDir);
         if (!command.outputDir) {
           deleteFolder(outputFolder);
         }
@@ -1433,6 +1554,16 @@ function requestAccessKey(): Promise<string> {
   });
 }
 
+/**
+ * React Native 번들링을 실행합니다.
+ * @param bundleName 생성될 번들 파일의 이름
+ * @param development 개발 모드 여부
+ * @param entryFile 번들링의 시작점이 되는 JavaScript 파일 경로
+ * @param outputFolder 번들 파일을 저장할 디렉토리
+ * @param platform 대상 플랫폼(ios, android, windows)
+ * @param sourcemapOutput 소스맵 파일 출력 경로 (디버깅용)
+ * @returns 
+ */
 export const runReactNativeBundleCommand = (
   bundleName: string,
   development: boolean,
@@ -1441,40 +1572,51 @@ export const runReactNativeBundleCommand = (
   platform: string,
   sourcemapOutput: string
 ): Promise<void> => {
+  console.log("🤔 CLI RunReactNativeBundleCommand: ", bundleName);
   const reactNativeBundleArgs: string[] = [];
+  // 환경 변수에서 CODE_PUSH_NODE_ARGS를 추출합니다.
   const envNodeArgs: string = process.env.CODE_PUSH_NODE_ARGS;
 
   if (typeof envNodeArgs !== "undefined") {
     Array.prototype.push.apply(reactNativeBundleArgs, envNodeArgs.trim().split(/\s+/));
   }
-
+  
   const isOldCLI = fs.existsSync(path.join("node_modules", "react-native", "local-cli", "cli.js"));
-
+  
+  // React Native CLI 경로를 설정합니다.
+  // 구버전 CLI: node_modules/react-native/local-cli/cli.js
+  // 신버전 CLI: node_modules/react-native/cli.js
+  // 번들링에 필요한 인자들을 구성합니다.
   Array.prototype.push.apply(reactNativeBundleArgs, [
     isOldCLI ? path.join("node_modules", "react-native", "local-cli", "cli.js") : path.join("node_modules", "react-native", "cli.js"),
     "bundle",
-    "--assets-dest",
+    "--assets-dest", // 에셋 파일 저장 경로
     outputFolder,
-    "--bundle-output",
+    "--bundle-output", // 번들 파일 저장 경로
     path.join(outputFolder, bundleName),
-    "--dev",
+    "--dev", // 개발 모드 여부
     development,
-    "--entry-file",
+    "--entry-file", // 진입점 파일 경로
     entryFile,
     "--platform",
     platform,
   ]);
-
+  console.log("🤔 CLI RunReactNativeBundleCommand[2]: ", reactNativeBundleArgs);
+  // 소스맵 파일 출력 경로가 지정된 경우, 소스맵 파일 출력 경로를 추가합니다.
   if (sourcemapOutput) {
     reactNativeBundleArgs.push("--sourcemap-output", sourcemapOutput);
   }
-
+  console.log("🤔 CLI RunReactNativeBundleCommand[3]: ", reactNativeBundleArgs);
+  // 번들링 명령을 실행합니다.
   log(chalk.cyan('Running "react-native bundle" command:\n'));
   const reactNativeBundleProcess = spawn("node", reactNativeBundleArgs);
   log(`node ${reactNativeBundleArgs.join(" ")}`);
 
+  // 번들링 명령 실행 결과를 처리합니다.
   return Promise<void>((resolve, reject, notify) => {
+    console.log("🤔 CLI RunReactNativeBundleCommand[4]: ", reactNativeBundleProcess);
     reactNativeBundleProcess.stdout.on("data", (data: Buffer) => {
+      console.log("🤔 CLI RunReactNativeBundleCommand[5]: ", data.toString().trim());
       log(data.toString().trim());
     });
 
@@ -1483,7 +1625,9 @@ export const runReactNativeBundleCommand = (
     });
 
     reactNativeBundleProcess.on("close", (exitCode: number) => {
+      console.log("🤔 CLI RunReactNativeBundleCommand[5]: ", exitCode);
       if (exitCode) {
+        console.log("🤔 CLI RunReactNativeBundleCommand[6]: ", `"react-native bundle" command exited with code ${exitCode}.`);
         reject(new Error(`"react-native bundle" command exited with code ${exitCode}.`));
       }
 
@@ -1549,6 +1693,13 @@ function throwForInvalidEmail(email: string): void {
   }
 }
 
+/**
+ * 유효하지 않은 Semver 범위를 확인하고 오류를 발생시킵니다.
+ * > **Semver(Sementic Versioning)**
+ * -  소프트웨어 버전을 관리하기 위한 표준화된 버전 번호 지정 시스템
+ * - `MAJOR.MINOR.PATCH` 형식으로 구성되어 있습니다.
+ * @param semverRange 
+ */
 function throwForInvalidSemverRange(semverRange: string): void {
   if (semver.validRange(semverRange) === null) {
     throw new Error('Please use a semver-compliant target binary version range, for example "1.0.0", "*" or "^1.2.3".');

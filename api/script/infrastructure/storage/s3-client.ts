@@ -71,20 +71,45 @@ export class CustomS3Client {
     this._setupPromise = this.setup();
   }
 
+  private directUploadString(bucketName: string, key: string, content: string): Promise<void> {
+    console.log("🟡 직접 업로드:", key);
+    return this._s3Client
+      .send(
+        new PutObjectCommand({
+          Bucket: bucketName,
+          Key: key,
+          Body: content,
+        })
+      )
+      .then(() => {
+        console.log("🟡 직접 업로드 완료:", key);
+      })
+      .catch(error => {
+        console.error("🟡 직접 업로드 실패:", key, error);
+        throw this.handleS3Error(error);
+      });
+  }
+
   /**
    * S3 버킷 설정
    * @returns 설정 완료 Promise
    */
   private setup(): q.Promise<void> {
+    console.log("🟡🟡🟡🟡🟡🟡🟡 s3 setup");
     return q.Promise<void>((resolve, reject) => {
       // 버킷 존재 여부 확인 및 생성
       const checkAndCreateBucket = async (bucketName: string) => {
         try {
+          console.log("🟡🟡🟡🟡🟡🟡🟡 s3 setup [1]", bucketName, !!this._s3Client);
           // 버킷의 존재 여부를 확인합니다.
-          await this._s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+          await this._s3Client.send(new HeadBucketCommand({ Bucket: bucketName })).then((res) => {
+            console.log("🟡🟡🟡🟡🟡🟡🟡 s3 setup [2]", res);
+          });
         } catch (error) {
+          console.log("🟡🟡🟡🟡🟡🟡🟡 s3 setup [3]", error);
           if (error.name === "NotFound") {
             // 버킷이 존재하지 않는 경우 버킷을 생성합니다.
+            console.log("🟡🟡🟡🟡🟡🟡🟡 s3 setup [4]");
             await this._s3Client.send(
               new CreateBucketCommand({
                 Bucket: bucketName,
@@ -94,23 +119,30 @@ export class CustomS3Client {
               })
             );
           } else {
+            console.log("🟡🟡🟡🟡🟡🟡🟡 s3 setup [5]", error);
             throw error;
           }
         }
       };
 
       checkAndCreateBucket(CustomS3Client.BUCKET_NAME)
-        .then(() => {
-          //
-          return Promise.all([
-            // blob, history 헬스 체크
-            this.uploadString(CustomS3Client.BUCKET_NAME, CustomS3Client.BLOB_PREFIX + StorageKeys.getHealthCheckKey(), "health"),
-            this.uploadString(CustomS3Client.BUCKET_NAME, CustomS3Client.HISTORY_PREFIX + StorageKeys.getHealthCheckKey(), "health"),
-          ]);
-        })
-        .then(() => resolve())
-        .catch((error) => reject(error));
-    });
+      .then(() => {
+        console.log("🟡 버킷 확인/생성 완료, 헬스 체크 시작");
+        // uploadString 대신 directUploadString 사용
+        return Promise.all([
+          this.directUploadString(CustomS3Client.BUCKET_NAME, CustomS3Client.BLOB_PREFIX + StorageKeys.getHealthCheckKey(), "health"),
+          this.directUploadString(CustomS3Client.BUCKET_NAME, CustomS3Client.HISTORY_PREFIX + StorageKeys.getHealthCheckKey(), "health")
+        ]);
+      })
+      .then(() => {
+        console.log("🟡 헬스 체크 완료, 초기화 성공");
+        resolve();
+      })
+      .catch((error) => {
+        console.error("🟡 초기화 실패:", error);
+        reject(error);
+      });
+  });
   }
 
   /**
@@ -167,8 +199,11 @@ export class CustomS3Client {
    * @returns 업로드 완료 Promise
    */
   public uploadString(bucketName: string, key: string, content: string): q.Promise<void> {
+    console.log("🅾️ 문자열을 S3에 업로드합니다.", bucketName, key, content);
     return this._setupPromise.then(() => {
+      console.log("🅾️ _setupPromise가 시작됩니다.");
       return q.Promise<void>((resolve, reject) => {
+        console.log("🅾️ 문자열을 S3에 업로드합니다.");
         this._s3Client
           .send(
             new PutObjectCommand({
@@ -177,8 +212,14 @@ export class CustomS3Client {
               Body: content,
             })
           )
-          .then(() => resolve())
-          .catch((error) => reject(this.handleS3Error(error)));
+          .then(() => {
+            console.log("🅾️ 문자열을 S3에 업로드 완료");
+            resolve();
+          })
+          .catch((error) => {
+            console.log("🅾️ 문자열을 S3에 업로드 실패", error);
+            reject(this.handleS3Error(error));
+          });
       });
     });
   }
@@ -192,6 +233,7 @@ export class CustomS3Client {
    * @returns 업로드 완료 Promise
    */
   public uploadStream(bucketName: string, key: string, stream: stream.Readable, contentLength: number): q.Promise<void> {
+    console.log("🔴 스트림을 S3에 업로드합니다.", bucketName, key, contentLength);
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         // 스트림을 버퍼로 변환하여 S3에 업로드합니다.
@@ -199,7 +241,6 @@ export class CustomS3Client {
         stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
         stream.on("end", () => {
           const buffer = Buffer.concat(chunks);
-
           this._s3Client
             .send(
               new PutObjectCommand({
@@ -225,8 +266,10 @@ export class CustomS3Client {
    * @returns 다운로드 완료 Promise
    */
   public downloadString(bucketName: string, key: string): q.Promise<string> {
+    console.log("🔴 문자열을 S3에서 다운로드합니다.", bucketName, key);
     return this._setupPromise.then(() => {
       return q.Promise<string>((resolve, reject) => {
+        console.log("🔴 문자열을 S3에서 다운로드합니다.");
         this._s3Client
           .send(
             // 지정된 키에 해당하는 객체를 다운로드합니다.
@@ -236,10 +279,15 @@ export class CustomS3Client {
             })
           )
           .then(async (response) => {
+            console.log("🔴 문자열을 S3에서 다운로드합니다.");
             const bodyContents = await response.Body.transformToString();
+            console.log("🔴 문자열을 S3에서 다운로드 완료", bodyContents);
             resolve(bodyContents);
           })
-          .catch((error) => reject(this.handleS3Error(error)));
+          .catch((error) => {
+            console.log("🔴 문자열을 S3에서 다운로드 실패", error);
+            reject(this.handleS3Error(error));
+          });
       });
     });
   }
@@ -291,34 +339,40 @@ export class CustomS3Client {
 
   /**
    * 패키지 히스토리를 S3에 저장합니다.
-   * @param deploymentId 배포 ID
+   * @param deploymentKey 배포 키
    * @param packageHistory 패키지 히스토리
    * @returns 저장 완료 Promise
    */
-  public savePackageHistory(deploymentId: string, packageHistory: storage.Package[]): q.Promise<void> {
-    const key = CustomS3Client.HISTORY_PREFIX + StorageKeys.getPackageHistoryBlobId(deploymentId);
+  public savePackageHistory(deploymentKey: string, packageHistory: storage.Package[]): q.Promise<void> {
+    console.log("📦 패키지 히스토리를 S3에 저장합니다.", deploymentKey, packageHistory);
+    const key = CustomS3Client.HISTORY_PREFIX + StorageKeys.getPackageHistoryBlobId(deploymentKey);
     const content = JSON.stringify(packageHistory);
-
+    console.log("📦 패키지 히스토리 키:", key);
     return this.uploadString(CustomS3Client.BUCKET_NAME, key, content);
   }
 
   /**
    * 패키지 히스토리를 S3에서 로드합니다.
-   * @param deploymentId 배포 ID
+   * @param deploymentKey 배포 ID
    * @returns 로드 완료 Promise
    */
-  public loadPackageHistory(deploymentId: string): q.Promise<storage.Package[]> {
-    const key = CustomS3Client.HISTORY_PREFIX + StorageKeys.getPackageHistoryBlobId(deploymentId);
-
+  public loadPackageHistory(deploymentKey: string): q.Promise<storage.Package[]> {
+    console.log("📦 패키지 히스토리를 S3에서 로드합니다.", deploymentKey);
+    const key = CustomS3Client.HISTORY_PREFIX + StorageKeys.getPackageHistoryBlobId(deploymentKey);
+    console.log("📦 패키지 히스토리 키:", key);
     return this.downloadString(CustomS3Client.BUCKET_NAME, key)
       .then((content) => {
+        console.log("📦 패키지 히스토리 내용:", content);  
         try {
+          console.log("📦 패키지 히스토리 파싱:", JSON.parse(content));
           return JSON.parse(content);
         } catch (e) {
+          console.log("📦 패키지 히스토리 파싱 오류:", e);
           return [];
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        console.log("📦 패키지 히스토리 로드 오류:", error);
         // 히스토리가 없으면 빈 배열을 반환합니다.
         return [];
       });
@@ -393,6 +447,7 @@ export class CustomS3Client {
    */
   public addBlob(blobId: string, stream: stream.Readable, streamLength: number): q.Promise<string> {
     const key = CustomS3Client.BLOB_PREFIX + blobId;
+    console.log("🔴 addBlob", key, streamLength);
     return this.uploadStream(CustomS3Client.BUCKET_NAME, key, stream, streamLength).then(() => {
       // 새 객체가 업로드되면 관련 CloudFront 캐시를 무효화합니다.
       if (this._useCloudFront) {
