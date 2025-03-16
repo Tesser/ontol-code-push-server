@@ -25,7 +25,10 @@ export interface DeploymentMetrics {
   [packageLabelOrAppVersion: string]: UpdateMetrics;
 }
 
-/*in*/
+/**
+ * 배포 상태 보고 객체 (Req)
+ * - 앱 버전, 클라이언트 고유 ID, 배포 키, 이전 배포 키, 이전 라벨 또는 앱 버전, 라벨, 상태 등의 정보를 포함합니다.
+ */
 export interface DeploymentStatusReport {
   appVersion: string;
   clientUniqueId?: string;
@@ -71,7 +74,10 @@ export interface UpdateCheckCacheResponse {
   rolloutPackage?: UpdateCheckResponse;
 }
 
-/*in*/
+/**
+ * 업데이트 체크 요청 객체 (Req)
+ * - 앱 버전, 클라이언트 고유 ID, 배포 키, 패키지 해시, 설명 등의 정보를 포함합니다.
+ */
 export interface UpdateCheckRequest {
   appVersion: string;
   clientUniqueId?: string;

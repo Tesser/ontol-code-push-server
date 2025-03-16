@@ -141,21 +141,27 @@ export class RedisManager {
   }
 
   /**
-   * Get a response from cache if possible, otherwise return null.
-   * @param expiryKey: An identifier to get cached response if not expired
-   * @param url: The url of the request to cache
-   * @return The object of type CacheableResponse
+   * API 요청에 대한 응답을 Redis 캐시에서 조회하여, 동일한 요청이 반복될 때 데이터베이스 조회를 줄이고 응답 시간을 개선합니다.
+   * @param expiryKey: 캐시된 응답을 가져오기 위한 식별자
+   * @param url: 캐시할 요청의 URL
+   * @return 형식 CacheableResponse의 객체
    */
   public getCachedResponse(expiryKey: string, url: string): Promise<CacheableResponse> {
+    // Redis가 비활성화되었거나 초기화되지 않은 경우 캐시 없이 항상 원본 데이터를 반환합니다.
     if (!this.isEnabled) {
       return q<CacheableResponse>(null);
     }
 
+    // Redis의 해시 데이터 구조에서 주어진 키와 URL에 해당하는 값을 조회합니다.
+    // expiryKey는 해시 테이블의 이름으로 사용됩니다. (예: 배포 키의 해시)
+    // url은 해시 테이블 내의 필드 이름으로 사용됩니다.
     return this._promisifiedOpsClient.hget(expiryKey, url).then((serializedResponse: string): Promise<CacheableResponse> => {
       if (serializedResponse) {
+        // 캐시된 응답이 있으면 JSON 문자열을 JS 객체로 파싱하여 반환합니다.
         const response = <CacheableResponse>JSON.parse(serializedResponse);
         return q<CacheableResponse>(response);
       } else {
+        // 캐시된 응답이 없으면 null을 반환하여 캐시 미스를 나타냅니다.
         return q<CacheableResponse>(null);
       }
     });
