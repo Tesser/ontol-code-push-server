@@ -556,6 +556,7 @@ export class AwsMongoStorage implements storage.Storage {
    * @returns 패키지 히스토리
    */
   public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
+    console.log("👋🏻 AWS_MONGO getPackageHistory [1]: ", accountId, appId, deploymentId);
     return this.getDeployment(accountId, appId, deploymentId).then(() => {
       return this._s3Client.loadPackageHistory(deploymentId);
     });
@@ -570,7 +571,8 @@ export class AwsMongoStorage implements storage.Storage {
    */
   public getPackageHistoryFromDeploymentKey(deploymentKey: string): q.Promise<storage.Package[]> {
     return this.getDeploymentInfo(deploymentKey).then((info) => {
-      return this._s3Client.loadPackageHistory(info.deploymentId);
+      // key를 보내거나 id로 저장하도록 수정해야 함
+      return this._s3Client.loadPackageHistory(info.deploymentKey);
     });
   }
 

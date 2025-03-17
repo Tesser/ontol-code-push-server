@@ -400,6 +400,7 @@ export class MongoDBClient {
               resolve({
                 appId: findByAccountIdAndName.id,
                 deploymentId: deployment.id,
+                deploymentKey: deployment.key,
               });
             }
           });

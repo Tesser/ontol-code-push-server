@@ -50,6 +50,7 @@ function createResponseUsingStorage(
   res: express.Response,
   storage: storageTypes.Storage
 ): Promise<redis.CacheableResponse> {
+  console.log("🟢 createResponseUsingStorage [1]: ", req.query);
   // 클라이언트 요청에서 배포 키, 앱 버전, 패키지 해시, 개발용 앱 여부 등의 정보를 추출합니다.
   const deploymentKey: string = String(req.query.deploymentKey || req.query.deployment_key);
   const appVersion: string = String(req.query.appVersion || req.query.app_version);
@@ -141,6 +142,7 @@ function createResponseUsingStorage(
  * @returns 상태 확인 라우터
  */
 export function getHealthRouter(config: AcquisitionConfig): express.Router {
+  console.log("🟢 getHealthRouter [1]: ", config);
   const storage: storageTypes.Storage = config.storage;
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
@@ -169,6 +171,7 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
  * @returns 업데이트 체크 라우터
  */
 export function getAcquisitionRouter(config: AcquisitionConfig): express.Router {
+  console.log("🟢 getAcquisitionRouter [1]: ", config);
   const storage: storageTypes.Storage = config.storage;
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
@@ -179,6 +182,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
    * @returns 업데이트 체크 라우터
    */
   const updateCheck = function (newApi: boolean) {
+    console.log("🔵 updateCheck [1]: ", newApi);
     return function (req: express.Request, res: express.Response, next: (err?: any) => void) {
       // 요청 정보에서 배포 키, 클라이언트 ID, URL 등을 추출합니다.
       const deploymentKey: string = String(req.query.deploymentKey || req.query.deployment_key);
@@ -194,6 +198,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
       redisManager
         .getCachedResponse(key, url)
         .catch((error: Error) => {
+          console.log("🔵 updateCheck - Redis Error [2]: ", error);
           // Redis 오류를 저장하여 응답을 보낸 후 오류를 던질 수 있도록 합니다.
           redisError = error;
           return q<redis.CacheableResponse>(null);
@@ -256,6 +261,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
    * @returns 배포 상태 보고 라우터
    */
   const reportStatusDeploy = function (req: express.Request, res: express.Response, next: (err?: any) => void) {
+    console.log("🔵 reportStatusDeploy [1]: ", req.body);
     // 배포 키, 앱 버전, 이전 배포 키 등을 추출하고 필수 정보 누락 여부를 확인합니다.
     const deploymentKey = req.body.deploymentKey || req.body.deployment_key;
     const appVersion = req.body.appVersion || req.body.app_version;
@@ -341,6 +347,7 @@ export function getAcquisitionRouter(config: AcquisitionConfig): express.Router 
    * @returns 다운로드 상태 보고 라우터
    */
   const reportStatusDownload = function (req: express.Request, res: express.Response, next: (err?: any) => void) {
+    console.log("🔵 reportStatusDownload [1]: ", req.body);
     const deploymentKey = req.body.deploymentKey || req.body.deployment_key;
     if (!req.body || !deploymentKey || !req.body.label) {
       return errorUtils.sendMalformedRequestError(

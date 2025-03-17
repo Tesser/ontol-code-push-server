@@ -1,7 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { UpdateCheckResponse, UpdateCheckRequest, DeploymentStatusReport, DownloadReport } from "../script/types/rest-definitions";
+import { DeploymentStatusReport, DownloadReport, UpdateCheckRequest, UpdateCheckResponse } from "../script/types/rest-definitions";
 
 export namespace Http {
   export const enum Verb {
@@ -104,6 +104,7 @@ export class AcquisitionManager {
    * @param callback 콜백 함수
    */
   public queryUpdateWithCurrentPackage(currentPackage: Package, callback?: Callback<RemotePackage | NativeUpdateNotification>): void {
+    console.log("🟡 queryUpdateWithCurrentPackage [1]: ", currentPackage);
     // 현재 패키지와 앱 버전이 제공되었는지 확인합니다.
     if (!currentPackage || !currentPackage.appVersion) {
       throw new Error("Calling common acquisition SDK with incorrect package"); // Unexpected; indicates error in our implementation
@@ -197,6 +198,7 @@ export class AcquisitionManager {
     previousDeploymentKey?: string,
     callback?: Callback<void>
   ): void {
+    console.log("🟡 reportStatusDeploy [1]: ", deployedPackage, status, previousLabelOrAppVersion, previousDeploymentKey);
     const url: string = this._serverUrl + "reportStatus/deploy";
     const body: DeploymentStatusReport = {
       appVersion: this._appVersion,
@@ -267,6 +269,7 @@ export class AcquisitionManager {
    * @param callback 콜백 함수
    */
   public reportStatusDownload(downloadedPackage: Package, callback?: Callback<void>): void {
+    console.log("🟡 reportStatusDownload [1]: ", downloadedPackage);
     const url: string = this._serverUrl + "reportStatus/download";
     const body: DownloadReport = {
       clientUniqueId: this._clientUniqueId,

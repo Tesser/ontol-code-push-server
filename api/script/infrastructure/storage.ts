@@ -106,6 +106,7 @@ export interface Deployment {
 export interface DeploymentInfo {
   appId: string;
   deploymentId: string;
+  deploymentKey?: string;
 }
 
 /**

@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 import * as express from "express";
-import * as restHeaders from "../utils/rest-headers";
 import * as restTypes from "../types/rest-definitions";
+import * as restHeaders from "../utils/rest-headers";
 import ApplicationInsights = require("applicationinsights");
 import tryJSON = require("try-json");
 
@@ -43,6 +43,10 @@ interface ServiceResourceDefinition {
 
 const INSTRUMENTATION_KEY = process.env["APP_INSIGHTS_INSTRUMENTATION_KEY"];
 
+/**
+ * App Insights 서비스  
+ * - Microsoft의 Application Insights를 사용하여 애플리케이션의 모니터링과 분석을 관리하는 서비스 클래스
+ */
 export class AppInsights {
   private static ORIGIN_TAG = "Origin";
   private static ORIGIN_VERSION_TAG = "Origin version";
@@ -111,10 +115,21 @@ export class AppInsights {
     }
   }
 
+  /**
+   * Application Insights의 활성화 여부를 확인합니댜.
+   * @returns `boolean` INSTRUMENTATION_KEY가 설정 여부
+   */
   public static isAppInsightsInstrumented(): boolean {
     return !!INSTRUMENTATION_KEY;
   }
 
+  /**
+   * 오류 처리 핸들러
+   * @param err 오류 객체
+   * @param req 요청 객체
+   * @param res 응답 객체
+   * @param next 다음 처리 함수
+   */
   public errorHandler(err: any, req: express.Request, res: express.Response, next: Function): void {
     if (err && INSTRUMENTATION_KEY) {
       if (!req) {
@@ -148,6 +163,15 @@ export class AppInsights {
     }
   }
 
+  /**
+   * Express 미들웨어 라우터를 생성하여 모든 HTTP 요청을 모니터링합니다.
+   * - 요청 시작 시간을 기록하고 요청 처리 시간을 측정합니다.
+   * - 요청 URL, 메서드 등을 분석하여 태그 속성 생성합니다.
+   * - 요청 종류를 ServiceResource 기반으로 분류합니다.
+   * - CLI 또는 SDK 버전 정보를 추적합니다.
+   * - 요청 완료 시 사용자 활동 및 오류 응답을 추적합니다.
+   * @returns `express.Router` App Insights 라우터
+   */
   public getRouter(): express.Router {
     const router: express.Router = express.Router();
 
@@ -281,18 +305,36 @@ export class AppInsights {
     return router;
   }
 
+  /**
+   * 사용자 정의 이벤트를 Application Insights에 기록합니다.
+   * @param event 이벤트 이름
+   * @param properties 이벤트 속성
+   */
   public trackEvent(event: string, properties?: any): void {
     if (AppInsights.isAppInsightsInstrumented) {
       ApplicationInsights.defaultClient.trackEvent({ name: event, properties });
     }
   }
 
+  /**
+   * 예외 정보를 Application Insights에 기록합니다.
+   * @param err 예외 객체
+   * @param info 예외 측정 정보
+   */
   public trackException(err: any, info?: any): void {
     if (err && AppInsights.isAppInsightsInstrumented) {
       ApplicationInsights.defaultClient.trackException({ exception: err, measurements: info });
     }
   }
 
+  /**
+   * HTTP 메서드, URL, 상태 코드, 리소스 유형에 따라 분석 태그 속성을 생성합니다.
+   * @param method HTTP 메서드
+   * @param url 요청 URL
+   * @param statusCode 응답 상태 코드
+   * @param resource 서비스 리소스 유형
+   * @returns 분석 태그 속성
+   */
   private getTagProperty(method: string, url: string, statusCode: number, resource: ServiceResource): string {
     if (!statusCode) {
       return null;
@@ -376,6 +418,11 @@ export class AppInsights {
     }
   }
 
+  /**
+   * URL 패턴을 분석하여 해당하는 ServiceResource 열거형 값을 반환합니다.
+   * @param url 요청 URL
+   * @returns 서비스 리소스 유형
+   */
   private getServiceResource(url: string): ServiceResource {
     const definitions = AppInsights.SERVICE_RESOURCE_DEFINITIONS;
     for (let i = 0; i < definitions.length; i++) {
@@ -387,6 +434,11 @@ export class AppInsights {
     return ServiceResource.Other;
   }
 
+  /**
+   * ServiceResource 열거형 값에 해당하는 태그 문자열을 반환합니다.
+   * @param resource 서비스 리소스 유형
+   * @returns 태그 문자열
+   */
   private getTag(resource: ServiceResource): string {
     const definitions = AppInsights.SERVICE_RESOURCE_DEFINITIONS;
     for (let i = 0; i < definitions.length; i++) {
@@ -398,6 +450,12 @@ export class AppInsights {
     return null;
   }
 
+  /**
+   * 배포 상태 정보를 태그 속성에 추가합니다.
+   * @param tagProperties 태그 속성
+   * @param status 배포 상태
+   * @param deploymentKey 배포 키
+   */
   private reportStatus(tagProperties: any, status: string, deploymentKey: string): void {
     tagProperties["Deployment Key"] = deploymentKey;
     tagProperties["Deployment status"] = status;
