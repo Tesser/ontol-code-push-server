@@ -5,11 +5,8 @@ import * as cookieSession from "cookie-session";
 import { Request, RequestHandler, Response, Router } from "express";
 import rateLimit from "express-rate-limit";
 import * as passport from "passport";
-import * as passportGitHub from "passport-github2";
 import * as passportBearer from "passport-http-bearer";
-import * as passportWindowsLive from "passport-windowslive";
 import * as q from "q";
-const passportActiveDirectory = require("passport-azure-ad");
 
 import * as storage from "../infrastructure/storage";
 import * as restErrorUtils from "../utils/rest-error-handling";
@@ -37,7 +34,6 @@ interface EmailAccount {
 }
 
 export class PassportAuthentication {
-  private static AZURE_AD_PROVIDER_NAME = "azure-ad";
   private static GITHUB_PROVIDER_NAME = "github";
   private static MICROSOFT_PROVIDER_NAME = "microsoft";
 
@@ -160,7 +156,6 @@ export class PassportAuthentication {
 
     if (isMicrosoftAuthenticationEnabled) {
       this.setupMicrosoftRoutes(router, microsoftClientId, microsoftClientSecret);
-      this.setupAzureAdRoutes(router, microsoftClientId, microsoftClientSecret);
     }
 
     router.get("/auth/login", this._cookieSessionMiddleware, (req: Request, res: Response): any => {
@@ -218,8 +213,6 @@ export class PassportAuthentication {
 
   private static getProviderId(account: storage.Account, provider: string): string {
     switch (provider) {
-      case PassportAuthentication.AZURE_AD_PROVIDER_NAME:
-        return account.azureAdId;
       case PassportAuthentication.GITHUB_PROVIDER_NAME:
         return account.gitHubId;
       case PassportAuthentication.MICROSOFT_PROVIDER_NAME:
@@ -231,9 +224,6 @@ export class PassportAuthentication {
 
   private static setProviderId(account: storage.Account, provider: string, id: string): void {
     switch (provider) {
-      case PassportAuthentication.AZURE_AD_PROVIDER_NAME:
-        account.azureAdId = id;
-        return;
       case PassportAuthentication.GITHUB_PROVIDER_NAME:
         account.gitHubId = id;
         return;
@@ -471,43 +461,6 @@ export class PassportAuthentication {
       new passportWindowsLive.Strategy(
         options,
         (accessToken: string, refreshToken: string, profile: passport.Profile, done: (error: any, user: any) => void): void => {
-          done(/*err*/ null, profile);
-        }
-      )
-    );
-
-    this.setupCommonRoutes(router, providerName, strategyName);
-  }
-
-  private setupAzureAdRoutes(router: Router, microsoftClientId: string, microsoftClientSecret: string): void {
-    const providerName = PassportAuthentication.AZURE_AD_PROVIDER_NAME;
-    const strategyName = "azuread-openidconnect";
-    const options: any = {
-      redirectUrl: this.getCallbackUrl(providerName),
-      clientID: microsoftClientId,
-      clientSecret: microsoftClientSecret,
-      identityMetadata: `https://login.microsoftonline.com/${
-        process.env["MICROSOFT_TENANT_ID"] || "common"
-      }/v2.0/.well-known/openid-configuration`,
-      responseMode: "query",
-      responseType: "code",
-      scope: ["email", "profile"],
-      skipUserProfile: true, // Should be set to true for Azure AD
-      validateIssuer: false, // We allow AD authentication across multiple tenants
-      allowHttpForRedirectUrl: true,
-    };
-
-    passport.use(
-      new passportActiveDirectory.OIDCStrategy(
-        options,
-        (
-          iss: string,
-          sub: string,
-          profile: passport.Profile,
-          accessToken: string,
-          refreshToken: string,
-          done: (error: any, user: any) => void
-        ) => {
           done(/*err*/ null, profile);
         }
       )
