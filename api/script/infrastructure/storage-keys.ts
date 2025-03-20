@@ -14,8 +14,8 @@ export class StorageKeys {
     return `app:${appId}`;
   }
 
-  public static getDeploymentId(appId: string, deploymentId: string): string {
-    return `deployment:${appId}:${deploymentId}`;
+  public static getDeploymentId(appId: string, deploymentKey: string): string {
+    return `deployment:${appId}:${deploymentKey}`;
   }
 
   public static getAccessKeyId(accountId: string, accessKeyId: string): string {
@@ -31,8 +31,8 @@ export class StorageKeys {
     return `package/${packageHash}`;
   }
 
-  public static getPackageHistoryBlobId(deploymentId: string): string {
-    return `packageHistory/${deploymentId}`;
+  public static getPackageHistoryBlobId(deploymentKey: string): string {
+    return `packageHistory/${deploymentKey}`;
   }
 
   public static getManifestBlobId(packageHash: string): string {

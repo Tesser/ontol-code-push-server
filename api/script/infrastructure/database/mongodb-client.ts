@@ -228,11 +228,13 @@ export class MongoDBClient {
    * @returns 앱 정보
    */
   public getApp(appId: string): q.Promise<storage.App> {
+    console.log("🍃 getApp", appId);
     return this._setupPromise.then(() => {
       return q.Promise<storage.App>((resolve, reject) => {
         this._connection.collections.apps
           .findOne({ id: appId })
           .then((app) => {
+            console.log("🍃 getApp [1]", app);
             if (!app) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
@@ -341,17 +343,20 @@ export class MongoDBClient {
   /**
    * 배포 데이터를 조회합니다.
    * @param appId 조회할 앱 ID
-   * @param deploymentId 조회할 배포 ID
+   * @param deploymentKey 조회할 배포 키
    * @returns 배포 정보
    */
-  public getDeployment(appId: string, deploymentId: string): q.Promise<storage.Deployment> {
+  public getDeployment(appId: string, deploymentKey: string): q.Promise<storage.Deployment> {
+    console.log("🍃 getDeployment", appId, deploymentKey);
     return this._setupPromise.then(() => {
       return q.Promise<storage.Deployment>((resolve, reject) => {
+        console.log("🍃 getDeployment [1]", appId, deploymentKey);
         this._connection.collections.deployments
           .findOne({
-            id: StorageKeys.getDeploymentId(appId, deploymentId),
+            key: deploymentKey,
           })
           .then((deployment) => {
+            console.log("🍃 getDeployment [2]", deployment);
             if (!deployment) {
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
@@ -395,6 +400,7 @@ export class MongoDBClient {
               resolve({
                 appId: findByAccountIdAndName.id,
                 deploymentId: deployment.id,
+                deploymentKey: deployment.key,
               });
             }
           });
@@ -432,13 +438,17 @@ export class MongoDBClient {
    * @param updates 업데이트할 정보
    * @returns 완료 Promise
    */
-  public updateDeployment(appId: string, deploymentId: string, updates: any): q.Promise<void> {
+  public updateDeployment(appId: string, deploymentKey: string, updates: any): q.Promise<void> {
+    console.log("🍃 배포 정보를 업데이트합니다.", appId, deploymentKey, updates);
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
+        console.log("🍃 배포 정보를 업데이트합니다.", StorageKeys.getDeploymentId(appId, deploymentKey));
         this._connection.collections.deployments
-          .updateOne({ id: StorageKeys.getDeploymentId(appId, deploymentId) }, { $set: updates })
+          .updateOne({ key: deploymentKey }, { $set: updates }) 
           .then((result) => {
+            console.log("🍃 배포 정보를 업데이트합니다.", result);
             if (result.matchedCount === 0) {
+              console.log("🍃 일치하는 배포 정보를 찾을 수 없습니다..", storage.ErrorCode.NotFound);
               reject(storage.storageError(storage.ErrorCode.NotFound));
             } else {
               resolve();

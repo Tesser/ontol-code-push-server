@@ -157,6 +157,7 @@ export class AwsMongoStorage implements storage.Storage {
    * @returns 앱 객체
    */
   public getApp(accountId: string, appId: string): q.Promise<storage.App> {
+    console.log("🔴 getApp", accountId, appId);
     return this._mongoClient.getApp(appId).then((app) => {
       // 현재 사용자 표시
       if (app.collaborators) {
@@ -423,12 +424,13 @@ export class AwsMongoStorage implements storage.Storage {
    * @where MongoDB
    * @param accountId 계정 ID
    * @param appId 앱 ID
-   * @param deploymentId 배포 ID
+   * @param deploymentKey 배포 키
    * @returns 배포 정보
    */
-  public getDeployment(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Deployment> {
+  public getDeployment(accountId: string, appId: string, deploymentKey: string): q.Promise<storage.Deployment> {
+    console.log("🔴 getDeployment", accountId, appId, deploymentKey);
     return this.getApp(accountId, appId).then(() => {
-      return this._mongoClient.getDeployment(appId, deploymentId);
+      return this._mongoClient.getDeployment(appId, deploymentKey);
     });
   }
 
@@ -498,36 +500,42 @@ export class AwsMongoStorage implements storage.Storage {
    * @where S3, MongoDB
    * @param accountId 계정 ID
    * @param appId 앱 ID
-   * @param deploymentId 배포 ID
+   * @param deploymentKey 배포 키
    * @param pkg 패키지 객체
    * @returns 패키지 객체
    */
-  public commitPackage(accountId: string, appId: string, deploymentId: string, pkg: storage.Package): q.Promise<storage.Package> {
+  public commitPackage(accountId: string, appId: string, deploymentKey: string, pkg: storage.Package): q.Promise<storage.Package> {
     pkg = storage.clone(pkg);
-
+    console.log("🔨 storage.clone", accountId, appId, deploymentKey, pkg);
     return q.Promise<storage.Package>((resolve, reject) => {
       // 배포 정보 및 패키지 히스토리를 조회합니다.
-      this.getDeployment(accountId, appId, deploymentId)
+      this.getDeployment(accountId, appId, deploymentKey)
         .then((deployment) => {
-          return this._s3Client.loadPackageHistory(deploymentId);
+          console.log("🔨 패키지 히스토리를 조회합니다.", deployment);
+          return this._s3Client.loadPackageHistory(deploymentKey);
         })
         .then((packageHistory) => {
+          console.log("🔨 기존 패키지 히스토리 조회 후 새로운 패키지의 라벨을 생성합니다.", packageHistory);
           // 기존 패키지 히스토리 조회 후 새로운 패키지의 라벨을 생성합니다.
           pkg.label = this.getNextLabel(packageHistory);
           pkg.uploadTime = new Date().getTime();
 
           // 패키지 히스토리에 새로운 패키지를 추가합니다.
+          console.log("🔨 패키지 히스토리에 새로운 패키지를 추가합니다.", pkg);
           packageHistory.push(pkg);
 
           // 히스토리 크기를 제한합니다.
           if (packageHistory.length > 50) {
+            console.log("🔨 패키지 히스토리 크기를 제한합니다.", packageHistory);
             packageHistory = packageHistory.slice(packageHistory.length - 50);
           }
 
           // 패키지 히스토리를 S3에 저장합니다.
-          return this._s3Client.savePackageHistory(deploymentId, packageHistory).then(() => {
+          console.log("🔨 패키지 히스토리를 S3에 저장합니다.", packageHistory);
+          return this._s3Client.savePackageHistory(deploymentKey, packageHistory).then(() => {
             // 배포 정보를 MongoDB에 업데이트합니다.
-            return this._mongoClient.updateDeployment(appId, deploymentId, {
+            console.log("🔨 배포 정보를 MongoDB에 업데이트합니다.", pkg);
+            return this._mongoClient.updateDeployment(appId, deploymentKey, {
               package: pkg,
             });
           });
@@ -548,6 +556,7 @@ export class AwsMongoStorage implements storage.Storage {
    * @returns 패키지 히스토리
    */
   public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
+    console.log("👋🏻 AWS_MONGO getPackageHistory [1]: ", accountId, appId, deploymentId);
     return this.getDeployment(accountId, appId, deploymentId).then(() => {
       return this._s3Client.loadPackageHistory(deploymentId);
     });
@@ -562,7 +571,8 @@ export class AwsMongoStorage implements storage.Storage {
    */
   public getPackageHistoryFromDeploymentKey(deploymentKey: string): q.Promise<storage.Package[]> {
     return this.getDeploymentInfo(deploymentKey).then((info) => {
-      return this._s3Client.loadPackageHistory(info.deploymentId);
+      // key를 보내거나 id로 저장하도록 수정해야 함
+      return this._s3Client.loadPackageHistory(info.deploymentKey);
     });
   }
 
@@ -716,6 +726,7 @@ export class AwsMongoStorage implements storage.Storage {
 
     const lastLabel: string = packageHistory[packageHistory.length - 1].label;
     const lastVersion: number = parseInt(lastLabel.substring(1)); // Trim 'v' from the front
+    console.log("🏷️ 새 라벨을 생성합니다.", lastLabel);
     return "v" + (lastVersion + 1);
   }
 

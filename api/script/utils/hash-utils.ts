@@ -40,6 +40,11 @@ export function generatePackageHashFromDirectory(directoryPath: string, basePath
   });
 }
 
+/**
+ * 패키지 매니페스트를 생성합니다.
+ * @param filePath 패키지 파일 경로
+ * @returns 패키지 매니페스트
+ */
 export function generatePackageManifestFromZip(filePath: string): Promise<PackageManifest> {
   const deferred: q.Deferred<PackageManifest> = q.defer<PackageManifest>();
   const reject = (error: Error) => {
@@ -172,6 +177,10 @@ export function hashStream(readStream: stream.Readable): Promise<string> {
   return deferred.promise;
 }
 
+/**
+ * 패키지 매니페스트 클래스
+ * : 패키지 내의 파일들의 해시를 포함하는 파일입니다.
+ */
 export class PackageManifest {
   private _map: Map<string, string>;
 

@@ -87,16 +87,22 @@ class PromisifiedRedisClient {
   }
 }
 
+/**
+ * Redis 클라이언트 관리
+*/
 export class RedisManager {
   private static DEFAULT_EXPIRY: number = 3600; // one hour, specified in seconds
   private static METRICS_DB: number = 1;
-
+  
   private _opsClient: redis.RedisClient;
   private _promisifiedOpsClient: PromisifiedRedisClient;
   private _metricsClient: redis.RedisClient;
   private _promisifiedMetricsClient: PromisifiedRedisClient;
   private _setupMetricsClientPromise: Promise<void>;
-
+  
+  /**
+   * 환경 변수에서 Redis 호스트, 포트, 키 정보를 가져와 운영용과 메트릭용 두 개의 Redis 클라이언트를 생성합니다.
+   */
   constructor() {
     if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
       const redisConfig = {
@@ -128,10 +134,18 @@ export class RedisManager {
     }
   }
 
+  /**
+   * Redis 클라이언트가 활성화되었는지 여부를 확인합니다.
+   * @returns `boolean` Redis 클라이언트가 활성화되었는지 여부
+   */
   public get isEnabled(): boolean {
     return !!this._opsClient && !!this._metricsClient;
   }
 
+  /**
+   * Redis 클라이언트의 상태를 확인합니다.
+   * @returns `Promise<void>` Redis 클라이언트의 상태
+   */
   public checkHealth(): Promise<void> {
     if (!this.isEnabled) {
       return q.reject<void>("Redis manager is not enabled");
@@ -141,38 +155,44 @@ export class RedisManager {
   }
 
   /**
-   * Get a response from cache if possible, otherwise return null.
-   * @param expiryKey: An identifier to get cached response if not expired
-   * @param url: The url of the request to cache
-   * @return The object of type CacheableResponse
+   * API 요청에 대한 응답을 Redis 캐시에서 조회하여, 동일한 요청이 반복될 때 데이터베이스 조회를 줄이고 응답 시간을 개선합니다.
+   * @param expiryKey: 캐시된 응답을 가져오기 위한 식별자
+   * @param url: 캐시할 요청의 URL
+   * @return 형식 CacheableResponse의 객체
    */
   public getCachedResponse(expiryKey: string, url: string): Promise<CacheableResponse> {
+    // Redis가 비활성화되었거나 초기화되지 않은 경우 캐시 없이 항상 원본 데이터를 반환합니다.
     if (!this.isEnabled) {
       return q<CacheableResponse>(null);
     }
 
+    // Redis의 해시 데이터 구조에서 주어진 키와 URL에 해당하는 값을 조회합니다.
+    // expiryKey는 해시 테이블의 이름으로 사용됩니다. (예: 배포 키의 해시)
+    // url은 해시 테이블 내의 필드 이름으로 사용됩니다.
     return this._promisifiedOpsClient.hget(expiryKey, url).then((serializedResponse: string): Promise<CacheableResponse> => {
       if (serializedResponse) {
+        // 캐시된 응답이 있으면 JSON 문자열을 JS 객체로 파싱하여 반환합니다.
         const response = <CacheableResponse>JSON.parse(serializedResponse);
         return q<CacheableResponse>(response);
       } else {
+        // 캐시된 응답이 없으면 null을 반환하여 캐시 미스를 나타냅니다.
         return q<CacheableResponse>(null);
       }
     });
   }
 
   /**
-   * Set a response in redis cache for given expiryKey and url.
-   * @param expiryKey: An identifier that you can later use to expire the cached response
-   * @param url: The url of the request to cache
-   * @param response: The response to cache
+   * API 응답을 Redis 캐시에 저장합니다.
+   * @param expiryKey: 캐시된 응답을 가져오기 위한 식별자
+   * @param url: 캐시할 요청의 URL
+   * @param response: 캐시할 응답
    */
   public setCachedResponse(expiryKey: string, url: string, response: CacheableResponse): Promise<void> {
     if (!this.isEnabled) {
       return q<void>(null);
     }
 
-    // Store response in cache with a timed expiry
+    // 캐시에 응답을 저장하고 시간 제한 만료 기간을 설정합니다.
     const serializedResponse: string = JSON.stringify(response);
     let isNewKey: boolean;
     return this._promisifiedOpsClient
@@ -189,8 +209,13 @@ export class RedisManager {
       .then(() => {});
   }
 
-  // Atomically increments the status field for the deployment by 1,
-  // or 1 by default. If the field does not exist, it will be created with the value of 1.
+  /**
+   * 특정 배포 키, 라벨, 상태에 대한 카운터를 증가시킵니다.
+   * - 배포 상태 메트릭을 추적하는 데 사용됩니다.
+   * @param deploymentKey: 배포 키
+   * @param label: 레이블
+   * @param status: 상태
+   */
   public incrementLabelStatusCount(deploymentKey: string, label: string, status: string): Promise<void> {
     if (!this.isEnabled) {
       return q(<void>null);
@@ -202,6 +227,11 @@ export class RedisManager {
     return this._setupMetricsClientPromise.then(() => this._promisifiedMetricsClient.hincrby(hash, field, 1)).then(() => {});
   }
 
+  /**
+   * 특정 배포 키에 대한 모든 메트릭을 삭제합니다.
+   * - 배포 키 관련 라벨과 클라이언트 해시를 삭제합니다.
+   * @param deploymentKey: 배포 키
+   */
   public clearMetricsForDeploymentKey(deploymentKey: string): Promise<void> {
     if (!this.isEnabled) {
       return q(<void>null);
@@ -217,8 +247,12 @@ export class RedisManager {
       .then(() => {});
   }
 
-  // Promised return value will look something like
-  // { "v1:DeploymentSucceeded": 123, "v1:DeploymentFailed": 4, "v1:Active": 123 ... }
+  /**
+   * 특정 배포 키에 대한 모든 메트릭을 조회합니다.
+   * - 배포 성공, 실패, 활성 사용자 수 등의 메트릭을 반환합니다.
+   * @param deploymentKey: 배포 키
+   * @returns `Promise<DeploymentMetrics>` 배포 키에 대한 모든 메트릭
+   */
   public getMetricsWithDeploymentKey(deploymentKey: string): Promise<DeploymentMetrics> {
     if (!this.isEnabled) {
       return q(<DeploymentMetrics>null);
@@ -227,7 +261,7 @@ export class RedisManager {
     return this._setupMetricsClientPromise
       .then(() => this._promisifiedMetricsClient.hgetall(Utilities.getDeploymentKeyLabelsHash(deploymentKey)))
       .then((metrics) => {
-        // Redis returns numerical values as strings, handle parsing here.
+        // Redis는 숫자 값을 문자열로 반환하므로 여기서 파싱을 처리합니다.
         if (metrics) {
           Object.keys(metrics).forEach((metricField) => {
             if (!isNaN(metrics[metricField])) {
@@ -240,6 +274,15 @@ export class RedisManager {
       });
   }
 
+  /**
+   * 현재 배포 키와 라벨을 기록하고, 이전 배포 키와 라벨을 선택적으로 업데이트합니다.
+   * - 앱 업데이트 정보를 기록합니다.
+   * - 현재 배포 키의 활성 카운트와 성공 카운트를 증가시키고, 이전 배포 키가 있으면 해당 활성 카운트를 감소시킵니다.
+   * @param currentDeploymentKey: 현재 배포 키
+   * @param currentLabel: 현재 라벨
+   * @param previousDeploymentKey: 이전 배포 키
+   * @param previousLabel: 이전 라벨
+   */
   public recordUpdate(currentDeploymentKey: string, currentLabel: string, previousDeploymentKey?: string, previousLabel?: string) {
     if (!this.isEnabled) {
       return q(<void>null);
@@ -265,6 +308,12 @@ export class RedisManager {
       .then(() => {});
   }
 
+  /**
+   * 특정 배포 키에 대한 클라이언트의 활성 라벨을 제거합니다.
+   * - 특정 클라이언트 ID에 대한 배포 키 연결을 삭제합니다.
+   * @param deploymentKey: 배포 키
+   * @param clientUniqueId: 고유 클라이언트 ID
+   */
   public removeDeploymentKeyClientActiveLabel(deploymentKey: string, clientUniqueId: string) {
     if (!this.isEnabled) {
       return q(<void>null);
@@ -278,13 +327,20 @@ export class RedisManager {
       .then(() => {});
   }
 
+  /**
+   * 캐시 데이터를 무효화합니다.
+   * @param expiryKey: 캐시된 응답을 가져오기 위한 식별자
+   */
   public invalidateCache(expiryKey: string): Promise<void> {
     if (!this.isEnabled) return q(<void>null);
 
     return this._promisifiedOpsClient.del(expiryKey).then(() => {});
   }
 
-  // For unit tests only
+  /**
+   * Redis 연결을 종료합니다.
+   * - 단위 테스트에만 사용됩니다.
+   */
   public close(): Promise<void> {
     const promiseChain: Promise<void> = q(<void>null);
     if (!this._opsClient && !this._metricsClient) return promiseChain;
@@ -295,7 +351,12 @@ export class RedisManager {
       .then(() => <void>null);
   }
 
-  /* deprecated */
+  /**
+   * 특정 배포 키에 대한 클라이언트의 현재 활성 라벨을 조회합니다.
+   * @param deploymentKey: 배포 키
+   * @param clientUniqueId: 고유 클라이언트 ID
+   * @returns `Promise<string>` 현재 활성 라벨
+   */
   public getCurrentActiveLabel(deploymentKey: string, clientUniqueId: string): Promise<string> {
     if (!this.isEnabled) {
       return q(<string>null);
@@ -306,7 +367,13 @@ export class RedisManager {
     );
   }
 
-  /* deprecated */
+  /**
+   * 특정 배포 키에 대한 클라이언트의 현재 활성 라벨을 업데이트합니다.
+   * @param deploymentKey: 배포 키
+   * @param clientUniqueId: 고유 클라이언트 ID
+   * @param toLabel: 새로운 라벨
+   * @param fromLabel: 이전 라벨
+   */
   public updateActiveAppForClient(deploymentKey: string, clientUniqueId: string, toLabel: string, fromLabel?: string): Promise<void> {
     if (!this.isEnabled) {
       return q(<void>null);
