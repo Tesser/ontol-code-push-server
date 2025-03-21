@@ -2,10 +2,12 @@
 // Licensed under the MIT License.
 
 import * as assert from "assert";
+import * as dotenv from 'dotenv';
 import * as q from "q";
 import * as redis from "redis";
 
 import Promise = q.Promise;
+dotenv.config();
 
 export const DEPLOYMENT_SUCCEEDED = "DeploymentSucceeded";
 export const DEPLOYMENT_FAILED = "DeploymentFailed";

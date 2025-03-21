@@ -1,8 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as dotenv from 'dotenv';
 import * as express from "express";
 import * as defaultServer from "./default-server";
+dotenv.config();
 
 const https = require("https");
 const fs = require("fs");

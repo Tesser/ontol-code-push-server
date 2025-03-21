@@ -1,11 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as dotenv from 'dotenv';
 import * as express from "express";
 import * as restTypes from "../types/rest-definitions";
 import * as restHeaders from "../utils/rest-headers";
 import ApplicationInsights = require("applicationinsights");
 import tryJSON = require("try-json");
+dotenv.config();
 
 enum ServiceResource {
   AccessKeys,

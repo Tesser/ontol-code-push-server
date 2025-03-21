@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as dotenv from 'dotenv';
 import { Request, Response, Router } from "express";
 import rateLimit from "express-rate-limit";
 import * as fs from "fs";
@@ -28,6 +29,7 @@ import NameResolver = storageTypes.NameResolver;
 import PackageManifest = hashUtils.PackageManifest;
 import Promise = q.Promise;
 import tryJSON = require("try-json");
+dotenv.config();
 
 const DEFAULT_ACCESS_KEY_EXPIRY = 1000 * 60 * 60 * 24 * 60; // 60 days
 const ACCESS_KEY_MASKING_STRING = "(hidden)";

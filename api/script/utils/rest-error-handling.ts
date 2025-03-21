@@ -3,9 +3,11 @@
 
 import * as express from "express";
 
+import * as dotenv from 'dotenv';
 import * as errorModule from "../error";
 import * as storageTypes from "../infrastructure/storage";
 import { AppInsights } from "../services/app-insights";
+dotenv.config();
 
 const sanitizeHtml = require("sanitize-html");
 

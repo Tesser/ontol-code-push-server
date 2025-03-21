@@ -1,5 +1,7 @@
+import * as dotenv from 'dotenv';
 import { Request, Response, Router } from "express";
 import * as jwt from "jsonwebtoken";
+dotenv.config();
 
 export interface AuthenticationConfig {
   jwtSecret?: string;

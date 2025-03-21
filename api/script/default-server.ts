@@ -9,9 +9,11 @@ import { Storage } from "./infrastructure/storage";
 import { RedisManager } from "./redis-manager";
 
 import * as bodyParser from "body-parser";
+import * as dotenv from 'dotenv';
 import * as express from "express";
 import * as q from "q";
 const domain = require("express-domain-middleware");
+dotenv.config();
 
 function bodyParserErrorHandler(err: any, req: express.Request, res: express.Response, next: Function): void {
   if (err) {
