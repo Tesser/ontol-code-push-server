@@ -1,11 +1,13 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as dotenv from 'dotenv';
 import { Collection, Db, MongoClient } from "mongodb";
 import * as q from "q";
 import * as storage from "../storage";
 import { AccessKey, Account, App, Deployment } from "../storage";
 import { StorageKeys } from "../storage-keys";
+dotenv.config();
 
 export interface MongoDBConnection {
   // MongoDB 서버에 대한 연결 클라이언트
