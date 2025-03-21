@@ -38,7 +38,6 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
     .then(() => {
       const app = express();
       const auth = api.auth();
-      const appInsights = api.appInsights();
       const redisManager = new RedisManager();
 
       // First, to wrap all requests and catch all exceptions.
@@ -81,7 +80,6 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       // Before other middleware which may use request data that this middleware modifies.
       app.use(api.inputSanitizer());
 
-      // body-parser must be before the Application Insights router.
       app.use(bodyParser.urlencoded({ extended: true }));
       const jsonOptions: any = { limit: "10kb", strict: true };
       if (process.env.LOG_INVALID_JSON_REQUESTS === "true") {
@@ -97,12 +95,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       // If body-parser throws an error, catch it and set the request body to null.
       app.use(bodyParserErrorHandler);
 
-      // Before all other middleware to ensure all requests are tracked.
-      app.use(appInsights.router());
-
-      app.get("/", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
-        res.send("Welcome to the CodePush REST API!!");
-      });
+      // app.get("/", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
+      //   res.send("Welcome to the CodePush REST API!!");
+      // });
 
       app.set("etag", false);
       app.set("views", __dirname + "/views");
@@ -138,9 +133,6 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       } else {
         app.use(auth.legacyRouter());
       }
-
-      // Error handler needs to be the last middleware so that it can catch all unhandled exceptions
-      app.use(appInsights.errorHandler);
 
       done(null, app, storage);
     })
