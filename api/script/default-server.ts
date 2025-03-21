@@ -95,9 +95,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       // If body-parser throws an error, catch it and set the request body to null.
       app.use(bodyParserErrorHandler);
 
-      // app.get("/", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
-      //   res.send("Welcome to the CodePush REST API!!");
-      // });
+      app.get("/", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
+        res.send("Welcome to the CodePush REST API!!");
+      });
 
       app.set("etag", false);
       app.set("views", __dirname + "/views");

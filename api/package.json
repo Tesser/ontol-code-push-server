@@ -5,9 +5,10 @@
   "main": "./script/server.js",
   "scripts": {
     "start": "node ./bin/server.js",
-    "start:env": "pm2 start ecosystem.config.js",
+    "start:env": "npm run build && pm2 start ecosystem.config.js",
+    "start:dev": "node -r dotenv/config ./bin/server.js dotenv_config_path=.env dotenv_config_silent=true",
     "clean": "rimraf bin",
-    "build": "tsc && shx cp -r ./script/views ./bin/script",
+    "build": "npm run clean && tsc && shx cp -r ./script/views ./bin/script",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
     "lint:fix": "npx eslint ./script/**/*.ts --fix"
