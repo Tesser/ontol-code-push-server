@@ -13,7 +13,7 @@ defaultServer.start(function (err: Error, app: express.Express) {
   }
 
   const httpsEnabled: boolean = Boolean(process.env.HTTPS) || false;
-  const defaultPort: number = httpsEnabled ? 8443 : 3000;
+  const defaultPort: number = httpsEnabled ? 8443 : 3010;
 
   const port: number = Number(process.env.API_PORT) || Number(process.env.PORT) || defaultPort;
   let server: any;

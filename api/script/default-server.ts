@@ -99,7 +99,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.use(appInsights.router());
 
       app.get("/", (req: express.Request, res: express.Response, next: (err?: Error) => void): any => {
-        res.send("Welcome to the CodePush REST API!");
+        res.send("Welcome to the CodePush REST API!!");
       });
 
       app.set("etag", false);
