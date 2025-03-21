@@ -4,23 +4,14 @@
 import { Response } from "express";
 import * as api from "./api";
 import { fileUploadMiddleware } from "./file-upload-manager";
+import { AwsMongoStorage } from "./infrastructure/aws-mongodb";
 import { Storage } from "./infrastructure/storage";
-import { AzureStorage } from "./infrastructure/storage/azure-storage";
-import { JsonStorage } from "./infrastructure/storage/json-storage";
 import { RedisManager } from "./redis-manager";
-const { DefaultAzureCredential } = require("@azure/identity");
-const { SecretClient } = require("@azure/keyvault-secrets");
 
 import * as bodyParser from "body-parser";
 import * as express from "express";
 import * as q from "q";
-import { AwsMongoStorage } from "./infrastructure/aws-mongodb";
 const domain = require("express-domain-middleware");
-
-interface Secret {
-  id: string;
-  value: string;
-}
 
 function bodyParserErrorHandler(err: any, req: express.Request, res: express.Response, next: Function): void {
   if (err) {
@@ -37,29 +28,10 @@ function bodyParserErrorHandler(err: any, req: express.Request, res: express.Res
 
 export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage?: boolean): void {
   let storage: Storage;
-  let isKeyVaultConfigured: boolean;
-  let keyvaultClient: any;
 
   q<void>(null)
     .then(async () => {
-      if(process.env.MONGODB_URI){
-        storage = new AwsMongoStorage();
-      } else if (useJsonStorage) {
-        storage = new JsonStorage();
-      } else if (!process.env.AZURE_KEYVAULT_ACCOUNT) {
-        storage = new AzureStorage();
-      } else {
-        isKeyVaultConfigured = true;
-
-        const credential = new DefaultAzureCredential();
-
-        const vaultName = process.env.AZURE_KEYVAULT_ACCOUNT;
-        const url = `https://${vaultName}.vault.azure.net`;
-
-        const keyvaultClient = new SecretClient(url, credential);
-        const secret = await keyvaultClient.getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`);
-        storage = new AzureStorage(process.env.AZURE_STORAGE_ACCOUNT, secret);
-      }
+      storage = new AwsMongoStorage();
     })
     .then(() => {
       const app = express();
@@ -167,22 +139,6 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
 
       // Error handler needs to be the last middleware so that it can catch all unhandled exceptions
       app.use(appInsights.errorHandler);
-
-      if (isKeyVaultConfigured) {
-        // Refresh credentials from the vault regularly as the key is rotated
-        setInterval(() => {
-          keyvaultClient
-            .getSecret(`storage-${process.env.AZURE_STORAGE_ACCOUNT}`)
-            .then((secret: any) => {
-              return (<AzureStorage>storage).initialize(process.env.AZURE_STORAGE_ACCOUNT, secret);
-            })
-            .catch((error: Error) => {
-              console.error("Failed to initialize storage from Key Vault credentials");
-              appInsights.errorHandler(error);
-            })
-            .done();
-        }, Number(process.env.REFRESH_CREDENTIALS_INTERVAL) || 24 * 60 * 60 * 1000 /*daily*/);
-      }
 
       done(null, app, storage);
     })

@@ -64,13 +64,12 @@ module Validation {
     return (
       getStringValidator(/*maxLength=*/ 255, /*minLength=*/ 1)(email) &&
       emailValidator.validate(email) &&
-      !/[\\\/\?]/.test(email) && // Forbid URL special characters until #374 is resolved
-      !/[\x00-\x1F]/.test(email) && // Control characters
+      !/[\\\/\?]/.test(email) && // URL 특수 문자(\\, /, ?)를 금지합니다.
+      !/[\x00-\x1F]/.test(email) && // ASCII 제어 문자(0x00-0x1F 범위)를 금지합니다.
       !/[\x7F-\x9F]/.test(email) &&
-      !/#/.test(email) && // The Azure Storage library forbids this in PartitionKeys (in addition to the above)
-      !/[ \*]/.test(email) && // Our storage layer currently forbids these characters in PartitionKeys
+      !/[ \*]/.test(email) && // 현재 스토리지 레이어에서 PartitionKey에 공백(' ')과 별표('') 문자를 금지하고 있기 때문에 이 문자들을 허용하지 않습니다.
       !/:/.test(email)
-    ); // Forbid colon because we use it as a delimiter for qualified app names
+    ); // 콜론(:) 문자를 금지합니다. 이는 한정된 앱 이름에 대한 구분자로 사용되기 때문입니다.
   }
 
   function isValidTtlField(allowZero: boolean, val: number): boolean {
