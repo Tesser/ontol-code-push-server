@@ -35,7 +35,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
     })
     .then(() => {
       const app = express();
-      const auth = api.auth({ storage: storage });
+      const auth = api.auth();
       const appInsights = api.appInsights();
       const redisManager = new RedisManager();
 
