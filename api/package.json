@@ -7,7 +7,7 @@
     "start": "node ./bin/server.js",
     "start:env": "pm2 start ecosystem.config.js",
     "clean": "rimraf bin",
-    "build": "tsc && shx cp -r ./script/views ./bin/script && shx cp .env ./bin",
+    "build": "tsc && shx cp -r ./script/views ./bin/script",
     "prettier": "prettier --write \"./**/*.ts\"",
     "lint": "npx eslint ./script/**/*.ts",
     "lint:fix": "npx eslint ./script/**/*.ts --fix"
