@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as dotenv from 'dotenv';
 import { Request, Response, Router } from "express";
 import rateLimit from "express-rate-limit";
 import * as fs from "fs";
@@ -28,6 +29,7 @@ import NameResolver = storageTypes.NameResolver;
 import PackageManifest = hashUtils.PackageManifest;
 import Promise = q.Promise;
 import tryJSON = require("try-json");
+dotenv.config();
 
 const DEFAULT_ACCESS_KEY_EXPIRY = 1000 * 60 * 60 * 24 * 60; // 60 days
 const ACCESS_KEY_MASKING_STRING = "(hidden)";
@@ -564,6 +566,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
   });
 
   router.get("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
+    console.log("✅ getDeployment", req.user.id, req.params.appName, req.params.deploymentName);
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const deploymentName: string = req.params.deploymentName;
@@ -572,11 +575,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
     nameResolver
       .resolveApp(accountId, appName)
       .then((app: storageTypes.App) => {
+        console.log("✅ getDeployment [1]", app);
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return nameResolver.resolveDeployment(accountId, appId, deploymentName);
       })
       .then((deployment: storageTypes.Deployment) => {
+        console.log("✅ getDeployment [2]", deployment);
         const restDeployment: restTypes.Deployment = converterUtils.toRestDeployment(deployment);
         res.send({ deployment: restDeployment });
       })
@@ -759,54 +764,81 @@ export function getManagementRouter(config: ManagementConfig): Router {
     max: 100, // limit each IP to 100 requests per windowMs
   });
 
+  /**
+   * 번들링된 파일을 CodePush 서버에 배포합니다.
+   * @param appName 앱 이름
+   * @param deploymentName 배포 이름
+   * @param req 요청 객체
+   * @param res 응답 객체
+   * @param next 오류 처리 함수
+   */
   router.post(
     "/apps/:appName/deployments/:deploymentName/release",
     releaseRateLimiter,
     (req: Request, res: Response, next: (err?: any) => void): any => {
+      console.log("🔴 요청에서 계정 ID, 앱 이름, 배포 이름을 추출합니다.", req.user.id, req.params.appName, req.params.deploymentName);
+      // 요청에서 계정 ID, 앱 이름, 배포 이름을 추출합니다.
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
       const deploymentName: string = req.params.deploymentName;
       const file: any = getFileWithField(req, "package");
 
+      // 패키지 파일이 없거나 버퍼가 없는 경우, 오류를 발생시킵니다.
       if (!file || !file.buffer) {
+        console.log("🔴 패키지 파일이 없거나 버퍼가 없는 경우, 오류를 발생시킵니다.", file, file.buffer);
         errorUtils.sendMalformedRequestError(res, "A deployment package must include a file.");
         return;
       }
 
+      //  
       const filePath: string = createTempFileFromBuffer(file.buffer);
+      console.log("🔴 임시 파일 생성", filePath);
+      // 패키지 정보의 유효성을 검사하고, 유효하지 않으면 오류를 반환합니다.
+      // restPackage: API 요청에서 전달받은 패키지 정보
       const restPackage: restTypes.Package = tryJSON(req.body.packageInfo) || {};
       const validationErrors: validationUtils.ValidationError[] = validationUtils.validatePackageInfo(
         restPackage,
         /*allOptional*/ false
       );
+      console.log("🔴 패키지 정보의 유효성 검사", validationErrors);
       if (validationErrors.length) {
         errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
         return;
       }
 
+      // 패키지 파일의 크기를 확인하고, 파일이 존재하지 않거나 디렉토리인 경우 오류를 반환합니다.
       fs.stat(filePath, (err: NodeJS.ErrnoException, stats: fs.Stats): void => {
         if (err) {
           errorUtils.sendUnknownError(res, err, next);
           return;
         }
 
-        // These variables are for hoisting promise results and flattening the following promise chain.
+        // 이 변수들은 프로미스 결과를 호이스팅하고 다음 프로미스 체인을 평탄화 하기 위해 사용됩니다.
         let appId: string;
         let deploymentToReleaseTo: storageTypes.Deployment;
+        // 저장소에 저장될 형태로 변환된 패키지
         let storagePackage: storageTypes.Package;
+        // packageHash: 패키지 파일 또는 매니페스트에서 계산된 해시 값 (패키지의 고유 식별자)
         let lastPackageHashWithSameAppVersion: string;
+        // ZIP 파일에서 생성도니 매니페스트 객체입니다.
         let newManifest: PackageManifest;
 
         nameResolver
+          // 앱 이름을 사용하여 앱 ID를 찾습니다.
           .resolveApp(accountId, appName)
           .then((app: storageTypes.App) => {
+            console.log("🔴 앱 이름을 사용하여 앱 ID를 찾습니다.", app);
             appId = app.id;
+            // 사용자가 해당 앱에 대한 권한이 있는지 확인합니다.
             throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
+            // 배포 이름을 사용하여 배포 정보를 가져옵니다.
             return nameResolver.resolveDeployment(accountId, appId, deploymentName);
           })
           .then((deployment: storageTypes.Deployment) => {
+            console.log("🔴 배포 이름을 사용하여 배포 정보를 가져옵니다.", deployment);
             deploymentToReleaseTo = deployment;
             const existingPackage: storageTypes.Package = deployment.package;
+            // 기존 패키지가 존재하고, 롤아웃이 완료되지 않은 경우, 오류를 발생시킵니다.
             if (existingPackage && isUnfinishedRollout(existingPackage.rollout) && !existingPackage.isDisabled) {
               throw errorUtils.restError(
                 errorUtils.ErrorCode.Conflict,
@@ -814,26 +846,32 @@ export function getManagementRouter(config: ManagementConfig): Router {
               );
             }
 
-            return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.id);
+            // 배포에 대한 패키지 이력을 가져옵니다.
+            return storage.getPackageHistory(accountId, appId, deploymentToReleaseTo.key);
           })
           .then((history: storageTypes.Package[]) => {
+            console.log("🔴 배포에 대한 패키지 이력을 가져옵니다.", history);
+            // 동일한 앱 버전에 대한 마지막 패키지의 해시를 가져옵니다.
             lastPackageHashWithSameAppVersion = getLastPackageHashWithSameAppVersion(history, restPackage.appVersion);
+            // ZIP 파일에서 패키지 매니페스트를 생성합니다.
             return hashUtils.generatePackageManifestFromZip(filePath);
           })
           .then((manifest?: PackageManifest) => {
+            console.log("🔴 ZIP 파일에서 패키지 매니페스트를 생성합니다.", manifest);
             if (manifest) {
               newManifest = manifest;
-              // If update is a zip, generate a packageHash using the manifest, since
-              // that more accurately represents the contents of each file in the zip.
+              // 업데이트가 ZIP 파일인 경우, 매니페스트를 사용하여 패키지 해시를 생성합니다.
+              // 이는 ZIP 파일 내의 각 파일의 내용을 더 정확하게 나타냅니다.
               return newManifest.computePackageHash();
             } else {
-              // Update is not a zip (flat file), generate the packageHash over the
-              // entire file contents.
+              // 업데이트가 ZIP 파일이 아닌 경우(평탄화된 파일) 전체 파일 내용을 사용하여 패키지 해시를 생성합니다.
               return hashUtils.hashFile(filePath);
             }
           })
           .then((packageHash: string) => {
+            console.log("🔴 패키지 해시를 생성합니다.", packageHash);
             restPackage.packageHash = packageHash;
+            // 새 패키지 해시가 이전 패키지 해시와 동일하면 오류를 반환합니다.
             if (restPackage.packageHash === lastPackageHashWithSameAppVersion) {
               throw errorUtils.restError(
                 errorUtils.ErrorCode.Conflict,
@@ -841,52 +879,74 @@ export function getManagementRouter(config: ManagementConfig): Router {
               );
             }
 
+            console.log("🔴 패키지 파일을 스토리지에 추가하고 Blob ID를 받습니다.", security.generateSecureKey(accountId), stats.size);
+            // 패키지 파일을 스토리지에 추가하고 Blob ID를 받습니다.
             return storage.addBlob(security.generateSecureKey(accountId), fs.createReadStream(filePath), stats.size);
           })
-          .then((blobId: string) => storage.getBlobUrl(blobId))
+          .then((blobId: string) => {
+            console.log("🔴 Blob ID를 사용하여 Blob URL을 가져옵니다.", blobId);
+            // Blob ID를 사용하여 Blob URL을 가져옵니다.
+            return storage.getBlobUrl(blobId);
+          })
           .then((blobUrl: string) => {
+            console.log("🔴 Blob URL을 패키지 정보에 추가합니다.", blobUrl);
             restPackage.blobUrl = blobUrl;
             restPackage.size = stats.size;
 
-            // If newManifest is null/undefined, then the package is not a valid ZIP file.
+            // 매니페스트가 있는 경우 매니페스트도 스토리지에 추가하고 URL을 가져옵니다.
             if (newManifest) {
               const json: string = newManifest.serialize();
               const readStream: stream.Readable = streamifier.createReadStream(json);
-
+              console.log("🔴 매니페스트를 스토리지에 추가하고 URL을 가져옵니다.", json.length);
               return storage.addBlob(security.generateSecureKey(accountId), readStream, json.length);
             }
 
             return q(<string>null);
           })
           .then((blobId?: string) => {
+            console.log("🔴 Blob ID를 사용하여 Blob URL을 가져옵니다.", blobId);
             if (blobId) {
+              // Blob ID를 사용하여 Blob URL을 가져옵니다.
               return storage.getBlobUrl(blobId);
             }
 
             return q(<string>null);
           })
-          .then((manifestBlobUrl?: string) => {
+          .then((manifestBlobUrl?: string /** 매니페스트가 저장된 URL */) => {
+            console.log("🔴 패키지 정보를 스토리지 패키지로 변환합니다.", manifestBlobUrl);
+            // 패키지 정보를 스토리지 패키지로 변환합니다.
             storagePackage = converterUtils.toStoragePackage(restPackage);
             if (manifestBlobUrl) {
+              console.log("🔴 매니페스트 Blob URL이 있으면 패키지 정보에 추가합니다.", manifestBlobUrl);
+              // 매니페스트 Blob URL이 있으면 패키지 정보에 추가합니다.
               storagePackage.manifestBlobUrl = manifestBlobUrl;
             }
 
+            // 릴리즈 방법을 '업로드'로 설정하고 업로드 시간을 기록합니다.
             storagePackage.releaseMethod = storageTypes.ReleaseMethod.Upload;
             storagePackage.uploadTime = new Date().getTime();
-            return storage.commitPackage(accountId, appId, deploymentToReleaseTo.id, storagePackage);
+            console.log("🔴 릴리즈 방법을 '업로드'로 설정하고 업로드 시간을 기록합니다.", storagePackage);
+            // 패키지를 스토리지에 커밋합니다.
+            return storage.commitPackage(accountId, appId, deploymentToReleaseTo.key, storagePackage);
           })
           .then((committedPackage: storageTypes.Package): Promise<void> => {
+            console.log("🔴 커밋된 패키지를 패키지 정보에 추가합니다.", committedPackage);
             storagePackage.label = committedPackage.label;
             const restPackage: restTypes.Package = converterUtils.toRestPackage(committedPackage);
-
+            // 응답 헤더에 위치를 설정하고 201 상태 코드와 함께 응답을 보냅니다.
             res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
             res.status(201).send({ package: restPackage }); // Send response without blocking on cleanup
-
+            // 캐시를 무효화합니다. 
             return invalidateCachedPackage(deploymentToReleaseTo.key);
           })
-          .then(() => processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage))
+          .then(() => {
+            console.log("🔴 차이 정보를 처리합니다.");
+            // 차이 정보를 처리합니다.
+            return processDiff(accountId, appId, deploymentToReleaseTo.id, storagePackage);
+          })
           .finally((): void => {
-            // Cleanup; any errors before this point will still pass to the catch() block
+            console.log("🔴 임시 파일을 삭제합니다.");
+            // 임시 파일을 삭제합니다.
             fs.unlink(filePath, (err: NodeJS.ErrnoException): void => {
               if (err) {
                 errorUtils.sendUnknownError(res, err, next);
@@ -1182,7 +1242,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   );
 
-  function invalidateCachedPackage(deploymentKey: string): Q.Promise<void> {
+  function invalidateCachedPackage(deploymentKey: string): q.Promise<void> {
     return redisManager.invalidateCache(redis.Utilities.getDeploymentKeyHash(deploymentKey));
   }
 
@@ -1288,11 +1348,19 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .catch(diffErrorUtils.diffErrorHandler);
   }
 
+  /**
+   * 패키지 간의 차이점을 처리합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @param appPackage 앱 패키지
+   * @returns 패키지 차이 처리 결과
+   */
   function processDiff(accountId: string, appId: string, deploymentId: string, appPackage: storageTypes.Package): q.Promise<void> {
     if (!appPackage.manifestBlobUrl || process.env.ENABLE_PACKAGE_DIFFING) {
-      // No need to process diff because either:
-      //   1. The release just contains a single file.
-      //   2. Diffing disabled.
+      // 차이점 처리가 필요하지 않은 경우:
+      //   1. 단일 파일만 포함된 릴리스
+      //   2. 차이점 처리가 비활성화된 경우
       return q(<void>null);
     }
 

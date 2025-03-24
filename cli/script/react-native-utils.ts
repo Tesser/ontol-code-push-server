@@ -1,16 +1,32 @@
-import * as fs from "fs";
 import * as chalk from "chalk";
-import * as path from "path";
 import * as childProcess from "child_process";
+import * as fs from "fs";
+import * as path from "path";
 import { coerce, compare, valid } from "semver";
 import { fileDoesNotExistOrIsDirectory } from "./utils/file-utils";
 
 const g2js = require("gradle-to-js/lib/parser");
 
+/**
+ * 주어진 버전 문자열이 유효한 Semver 버전인지 확인합니다.
+ * @param version - 확인할 버전 문자열
+ * @returns 유효한 버전인 경우 true, 그렇지 않으면 false
+ */
 export function isValidVersion(version: string): boolean {
   return !!valid(version) || /^\d+\.\d+$/.test(version);
 }
 
+/**
+ * JavaScript 번들을 Hermes 바이트코드로 변환하는 명령을 실행합니다.
+ * 변환된 바이트코드 파일을 원래 JS 번들 위치로 복사합니다.
+ * 소스맵이 활성화된 경우 소스맵을 합성합니다.
+ * @param bundleName - 번들 이름
+ * @param outputFolder - 출력 폴더
+ * @param sourcemapOutput - 소스맵 출력 경로
+ * @param extraHermesFlags - 추가 플래그
+ * @param gradleFile - Gradle 파일 경로
+ * @returns Promise<void>
+ */
 export async function runHermesEmitBinaryCommand(
     bundleName: string,
     outputFolder: string,
@@ -124,6 +140,11 @@ export async function runHermesEmitBinaryCommand(
   });
 }
 
+/**
+ * Android 프로젝트의 build.gradle 파일을 파싱하여 프로젝트 설정을 추출합니다.
+ * @param gradleFile - Gradle 파일 경로
+ * @returns Promise<any> - Gradle 파일 내용
+ */
 function parseBuildGradleFile(gradleFile: string) {
   let buildGradlePath: string = path.join("android", "app");
   if (gradleFile) {
@@ -142,6 +163,11 @@ function parseBuildGradleFile(gradleFile: string) {
   });
 }
 
+/**
+ * Gradle 파일에서 Hermes 명령을 추출합니다.
+ * @param gradleFile - Gradle 파일 경로
+ * @returns Promise<string> - Hermes 명령 (`hermesCommand`)
+ */
 async function getHermesCommandFromGradle(gradleFile: string): Promise<string> {
   const buildGradle: any = await parseBuildGradleFile(gradleFile);
   const hermesCommandProperty: any = Array.from(buildGradle["project.ext.react"] || []).find((prop: string) =>
@@ -154,12 +180,22 @@ async function getHermesCommandFromGradle(gradleFile: string): Promise<string> {
   }
 }
 
+/**
+ * Gradle 파일에서 Hermes 활성화 여부를 확인합니다.
+ * @param gradleFile - Gradle 파일 경로
+ * @returns Promise<boolean> - Hermes 활성화 여부
+ */
 export function getAndroidHermesEnabled(gradleFile: string): boolean {
   return parseBuildGradleFile(gradleFile).then((buildGradle: any) => {
     return Array.from(buildGradle["project.ext.react"] || []).some((line: string) => /^enableHermes\s{0,}:\s{0,}true/.test(line));
   });
 }
 
+/**
+ * iOS 프로젝트의 Podfile 파일에서 Hermes 활성화 여부를 확인합니다.
+ * @param podFile - Podfile 파일 경로
+ * @returns boolean - Hermes 활성화 여부
+ */
 export function getiOSHermesEnabled(podFile: string): boolean {
   let podPath = path.join("ios", "Podfile");
   if (podFile) {
@@ -177,6 +213,10 @@ export function getiOSHermesEnabled(podFile: string): boolean {
   }
 }
 
+/**
+ * 현재 운영체제에 맞는 Hermes 실행 파일 이름을 반환합니다.
+ * @returns string - Hermes 바이너리 폴더 이름
+ */
 function getHermesOSBin(): string {
   switch (process.platform) {
     case "win32":
@@ -191,6 +231,11 @@ function getHermesOSBin(): string {
   }
 }
 
+/**
+ * 현재 운영체제에 맞는 Hermes 실행 파일 이름을 반환합니다.
+ * React Native 버전에 따라 `hermesc` 또는 `hermes` 실행 파일을 반환합니다.
+ * @returns string - Hermes 실행 파일 이름
+ */
 function getHermesOSExe(): string {
   const react63orAbove = compare(coerce(getReactNativeVersion()).version, "0.63.0") !== -1;
   const hermesExecutableName = react63orAbove ? "hermesc" : "hermes";
@@ -202,6 +247,15 @@ function getHermesOSExe(): string {
   }
 }
 
+/**
+ * Hermes 명령어의 전체 경로를 결정합니다.
+ * 다음 순서로 검색합니다:
+ * - React Native 패키지에 번들된 Hermes
+ * - gradle 파일에 지정된 Hermes 명령
+ * - node_modules의 hermes-engine 또는 hermesvm
+ * @param gradleFile - Gradle 파일 경로
+ * @returns Promise<string> - Hermes 명령
+ */
 async function getHermesCommand(gradleFile: string): Promise<string> {
   const fileExists = (file: string): boolean => {
     try {
@@ -229,6 +283,10 @@ async function getHermesCommand(gradleFile: string): Promise<string> {
   }
 }
 
+/**
+ * React Native의 소스맵 합성 스크립트 경로를 반환합니다.
+ * @returns string - 소스맵 합성 스크립트 경로
+ */
 function getComposeSourceMapsPath(): string {
   // detect if compose-source-maps.js script exists
   const composeSourceMaps = path.join(getReactNativePackagePath(), "scripts", "compose-source-maps.js");
@@ -238,6 +296,10 @@ function getComposeSourceMapsPath(): string {
   return null;
 }
 
+/**
+ * Node.js를 사용하여 React Native 패키지의 경로를 반환합니다.
+ * @returns string - React Native 패키지 경로
+ */
 function getReactNativePackagePath(): string {
   const result = childProcess.spawnSync("node", ["--print", "require.resolve('react-native/package.json')"]);
   const packagePath = path.dirname(result.stdout.toString());
@@ -248,6 +310,11 @@ function getReactNativePackagePath(): string {
   return path.join("node_modules", "react-native");
 }
 
+/**
+ * 지정된 디렉토리가 존재하는지 확인합니다.
+ * @param dirname - 확인할 디렉토리 경로
+ * @returns boolean - 디렉토리 존재 여부
+ */
 export function directoryExistsSync(dirname: string): boolean {
   try {
     return fs.statSync(dirname).isDirectory();
@@ -259,6 +326,12 @@ export function directoryExistsSync(dirname: string): boolean {
   return false;
 }
 
+/**
+ * 현재 프로젝트의 React Native 버전을 반환합니다.
+ * - 프로젝트의 package.json에서 React Native 버전을 추출합니다.
+ * - dependencies 또는 devDependencies에서 react-native 버전을 찾습니다.
+ * @returns string - React Native 버전
+ */
 export function getReactNativeVersion(): string {
   let packageJsonFilename;
   let projectPackageJson;

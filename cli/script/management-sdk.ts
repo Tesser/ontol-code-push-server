@@ -4,10 +4,10 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import Q = require("q");
-import superagent = require("superagent");
 import * as recursiveFs from "recursive-fs";
 import * as yazl from "yazl";
+import Q = require("q");
+import superagent = require("superagent");
 import slash = require("slash");
 
 import Promise = Q.Promise;
@@ -58,7 +58,7 @@ class AccountManager {
     OWNER: "Owner",
     COLLABORATOR: "Collaborator",
   };
-  public static SERVER_URL = "http://localhost:3000";
+  public static SERVER_URL = "http://localhost:3010";
 
   private static API_VERSION: number = 2;
 
@@ -85,19 +85,22 @@ class AccountManager {
   }
 
   public isAuthenticated(throwIfUnauthorized?: boolean): Promise<boolean> {
+    console.log("🤔 M_SDK AccountManager: ", this._serverUrl, this._accessKey);
     return Promise<any>((resolve, reject, notify) => {
       const request: superagent.Request<any> = superagent.get(`${this._serverUrl}${urlEncode(["/authenticated"])}`);
+      console.log("🤔 M_SDK AccountManager [1]: ", request);
       this.attachCredentials(request);
 
       request.end((err: any, res: superagent.Response) => {
         const status: number = this.getErrorStatus(err, res);
+        console.log("🤔 M_SDK AccountManager [2]: ", status);
         if (err && status !== AccountManager.ERROR_UNAUTHORIZED) {
           reject(this.getCodePushError(err, res));
           return;
         }
 
         const authenticated: boolean = status === 200;
-
+        console.log("🤔 M_SDK AccountManager [3]: ", authenticated);
         if (!authenticated && throwIfUnauthorized) {
           reject(this.getCodePushError(err, res));
           return;
@@ -269,7 +272,11 @@ class AccountManager {
   }
 
   public getDeployment(appName: string, deploymentName: string): Promise<Deployment> {
-    return this.get(urlEncode([`/apps/${appName}/deployments/${deploymentName}`])).then((res: JsonResponse) => res.body.deployment);
+    console.log("🤔 CLI AccountManager: ", appName, deploymentName);
+    return this.get(urlEncode([`/apps/${appName}/deployments/${deploymentName}`])).then((res: JsonResponse) => {
+      console.log("🤔 CLI AccountManager [1]: ", res.body.deployment);
+      return res.body.deployment;
+    });
   }
 
   public renameDeployment(appName: string, oldDeploymentName: string, newDeploymentName: string): Promise<void> {
@@ -295,6 +302,16 @@ class AccountManager {
     );
   }
 
+  /**
+   * 번들링된 파일을 CodePush 서버에 배포합니다.
+   * @param appName 앱 이름
+   * @param deploymentName 업데이트를 배포할 환경 이름 (예: "Staging", "Production")
+   * @param filePath 업로드할 파일 또는 디렉토리 경로
+   * @param targetBinaryVersion 업데이트가 적용될 대상 앱 버전 (Semver 형식)
+   * @param updateMetadata 업데이트 관련 메타데이터 (설명, 필수 여부 등)
+   * @param uploadProgressCallback 업로드 진행 상황을 보고하는 콜백 함수 (선택적)
+   * @returns Promise<void>
+   */
   public release(
     appName: string,
     deploymentName: string,
@@ -303,14 +320,22 @@ class AccountManager {
     updateMetadata: PackageInfo,
     uploadProgressCallback?: (progress: number) => void
   ): Promise<void> {
+    console.log("🤔 M_SDK AccountManager: ", appName, deploymentName, filePath, targetBinaryVersion, updateMetadata, uploadProgressCallback);
     return Promise<void>((resolve, reject, notify) => {
+      // 업데이트 메타데이터를 설정하고 요청을 초기화합니다.
+      // 메타데이터에 앱 버전을 추가하고, 서버 API 엔드포인트 URL을 구성합니다. 
       updateMetadata.appVersion = targetBinaryVersion;
+      console.log("🤔 M_SDK AccountManager [1]: ", updateMetadata);
       const request: superagent.Request<any> = superagent.post(
         this._serverUrl + urlEncode([`/apps/${appName}/deployments/${deploymentName}/release`])
       );
-
+      console.log("🤔 M_SDK AccountManager [2]: ", request);
+      // 액세스 키 등의 인증 정보를 첨부합니다.
       this.attachCredentials(request);
 
+      // 패키지 파일을 준비합니다.
+      // `packageFileFromPath` 메서드를 호출하여 디렉토리인 경우 ZIP 파일로 압축하고, 단일 파일인 경우 그대로 사용합니다.
+      console.log("🤔 M_SDK AccountManager [3]: ", filePath);
       const getPackageFilePromise = Q.Promise((resolve, reject) => {
         this.packageFileFromPath(filePath)
           .then((result) => {
@@ -321,30 +346,50 @@ class AccountManager {
           });
       });
 
+      // 패키지 파일을 업로드하고 진행 상황을 추적합니다.
+      console.log("🤔 M_SDK AccountManager [4]: ", getPackageFilePromise);
       getPackageFilePromise.then((packageFile: PackageFile) => {
+        // 패키지 파일을 스트림으로 읽어 요청에 첨부합니다.
+        console.log("🤔 M_SDK AccountManager [5]: ", packageFile);
         const file: any = fs.createReadStream(packageFile.path);
         request
           .attach("package", file)
+          // 메타 데이터를 JSON 문자열로 변환하여 요청 필드에 추가합니다.
           .field("packageInfo", JSON.stringify(updateMetadata))
+          // 업로드 진행 상황을 추적하고 표시합니다.
           .on("progress", (event: any) => {
             if (uploadProgressCallback && event && event.total > 0) {
               const currentProgress: number = (event.loaded / event.total) * 100;
               uploadProgressCallback(currentProgress);
             }
           })
+          // 요청이 완료되면 임시 파일을 삭제하고 결과를 처리합니다.
           .end((err: any, res: superagent.Response) => {
+            console.log("🤔 M_SDK AccountManager [6]: ", err, res);
             if (packageFile.isTemporary) {
+              console.log("🤔 M_SDK AccountManager [7]: ", packageFile.path);
               fs.unlinkSync(packageFile.path);
             }
-
+       
             if (err) {
-              reject(this.getCodePushError(err, res));
+              console.log("🔴 M_SDK AccountManager ERROR: ", err);
+              // 네트워크 관련 오류에 대한 더 자세한 메시지 제공
+              if (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT') {
+                reject(<CodePushError>{
+                  message: `네트워크 연결 문제: ${err.message}. 서버 연결을 확인하세요.`,
+                  statusCode: AccountManager.ERROR_GATEWAY_TIMEOUT,
+                });
+              } else {
+                reject(this.getCodePushError(err, res));
+              }
               return;
             }
 
             if (res.ok) {
+              console.log("🤔 M_SDK AccountManager [8]: ", res.ok);
               resolve(<void>null);
             } else {
+              console.log("🔴 M_SDK AccountManager [9]: ", res.text);
               let body;
               try {
                 body = JSON.parse(res.text);
@@ -490,9 +535,10 @@ class AccountManager {
   ): Promise<JsonResponse> {
     return Promise<JsonResponse>((resolve, reject, notify) => {
       let request: superagent.Request<any> = (<any>superagent)[method](this._serverUrl + endpoint);
-
+      console.log("🤔 M_SDK AccountManager [1]: ", request);
+      request = request.timeout(120000); // 120초로 타임아웃 설정
       this.attachCredentials(request);
-
+      console.log("🤔 M_SDK AccountManager [2]: ", request);
       if (requestBody) {
         if (contentType) {
           request = request.set("Content-Type", contentType);

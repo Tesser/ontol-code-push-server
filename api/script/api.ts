@@ -8,8 +8,7 @@ import { getManagementRouter, ManagementConfig } from "./controller/managementCo
 import { getHeadersMiddleware, HeadersConfig } from "./middleware/headers";
 import { InputSanitizer } from "./middleware/input-sanitizer";
 import { RequestTimeoutHandler } from "./middleware/request-timeout";
-import { AppInsights } from "./services/app-insights";
-import { AuthenticationConfig, PassportAuthentication } from "./services/passport-authentication";
+import { Authentication } from "./services/authentication";
 
 export function headers(config: HeadersConfig): RequestHandler {
   return getHeadersMiddleware(config);
@@ -27,21 +26,11 @@ export function management(config: ManagementConfig): Router {
   return getManagementRouter(config);
 }
 
-export function auth(config: AuthenticationConfig): any {
-  const passportAuthentication = new PassportAuthentication(config);
+export function auth(): any {
+  const authentication = new Authentication();
   return {
-    router: passportAuthentication.getRouter.bind(passportAuthentication),
-    legacyRouter: passportAuthentication.getLegacyRouter.bind(passportAuthentication),
-    authenticate: passportAuthentication.authenticate,
-  };
-}
-
-export function appInsights(): any {
-  const appInsights = new AppInsights();
-
-  return {
-    router: appInsights.getRouter.bind(appInsights),
-    errorHandler: appInsights.errorHandler.bind(appInsights),
+    router: authentication.getRouter.bind(authentication),
+    authenticate: authentication.authenticate.bind(authentication),
   };
 }
 

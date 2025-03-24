@@ -9,6 +9,12 @@ import { ALLOWED_KEY_CHARACTERS_TEST } from "./security";
 import emailValidator = require("email-validator");
 
 module Validation {
+  /**
+   * 문자열 유효성 검사 함수를 반환합니다.
+   * @param maxLength 최대 길이
+   * @param minLength 최소 길이
+   * @returns 유효성 검사 결과
+   */
   function getStringValidator(maxLength: number = 1000, minLength: number = 0): (value: any) => boolean {
     return function isValidString(value: string): boolean {
       if (typeof value !== "string") {
@@ -27,29 +33,43 @@ module Validation {
     return appVersion && semver.valid(appVersion) !== null;
   }
 
+  /**
+   * 앱 버전 범위의 유효성을 검사합니다.
+   * @param appVersion 앱 버전
+   * @returns 유효성 검사 결과
+   */
   function isValidAppVersionRangeField(appVersion: any): boolean {
     return !!semver.validRange(appVersion);
   }
 
+  /**
+   * 불리언 필드의 유효성을 검사합니다.
+   * @param val 불리언 값
+   * @returns 유효성 검사 결과
+   */
   function isValidBooleanField(val: any): boolean {
     return typeof val === "boolean";
   }
 
+  /**
+   * 레이블 필드의 유효성을 검사합니다.
+   * @param val 레이블
+   * @returns 유효성 검사 결과
+   */
   function isValidLabelField(val: any): boolean {
-    return val && val.match(/^v[1-9][0-9]*$/) !== null; //validates if label field confirms to 'v1-v9999...' standard
+    return val && val.match(/^v[1-9][0-9]*$/) !== null; //레이블 필드가 'v1-v9999...' 표준을 따르는지 검사합니다.
   }
 
   function isValidEmailField(email: any): boolean {
     return (
       getStringValidator(/*maxLength=*/ 255, /*minLength=*/ 1)(email) &&
       emailValidator.validate(email) &&
-      !/[\\\/\?]/.test(email) && // Forbid URL special characters until #374 is resolved
-      !/[\x00-\x1F]/.test(email) && // Control characters
+      !/[\\\/\?]/.test(email) && // URL 특수 문자(\\, /, ?)를 금지합니다.
+      !/[\x00-\x1F]/.test(email) && // ASCII 제어 문자(0x00-0x1F 범위)를 금지합니다.
       !/[\x7F-\x9F]/.test(email) &&
-      !/#/.test(email) && // The Azure Storage library forbids this in PartitionKeys (in addition to the above)
-      !/[ \*]/.test(email) && // Our storage layer currently forbids these characters in PartitionKeys
+      !/[ \*]/.test(email) && // 현재 스토리지 레이어에서 PartitionKey에 공백(' ')과 별표('') 문자를 금지하고 있기 때문에 이 문자들을 허용하지 않습니다.
       !/:/.test(email)
-    ); // Forbid colon because we use it as a delimiter for qualified app names
+    ); // 콜론(:) 문자를 금지합니다. 이는 한정된 앱 이름에 대한 구분자로 사용되기 때문입니다.
   }
 
   function isValidTtlField(allowZero: boolean, val: number): boolean {
@@ -70,11 +90,21 @@ module Validation {
     ); // Forbid colon because we use it as a delimiter for qualified app names
   }
 
+  /**
+   * 롤아웃 필드의 유효성을 검사합니다.
+   * @param rollout 롤아웃
+   * @returns 유효성 검사 결과
+   */
   export function isValidRolloutField(rollout: any): boolean {
-    // rollout is an optional field, or when defined should be a number between 1-100.
+    // rollout은 선택적 필드이며, 정의된 경우 1-100 사이의 숫자여야 합니다.
     return /^(100|[1-9][0-9]|[1-9])$/.test(rollout);
   }
 
+  /**
+   * 설명 필드의 유효성을 검사합니다.
+   * @param description 설명
+   * @returns 유효성 검사 결과
+   */
   const isValidDescriptionField = getStringValidator(/*maxLength=*/ 10000);
   const isValidFriendlyNameField = getStringValidator(/*maxLength=*/ 10000, /*minLength*/ 1);
 
@@ -157,6 +187,12 @@ module Validation {
     return validate(deployment, fields, requiredFields);
   }
 
+  /**
+   * 패키지 정보의 유효성을 검사합니다.
+   * @param packageInfo 패키지 정보
+   * @param allOptional 모든 필드가 선택적인지 여부
+   * @returns 유효성 검사 결과
+   */
   export function validatePackageInfo(packageInfo: restTypes.PackageInfo, allOptional: boolean): ValidationError[] {
     const fields: FieldDefinition = {
       appVersion: isValidAppVersionRangeField,
