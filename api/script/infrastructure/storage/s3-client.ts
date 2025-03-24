@@ -14,8 +14,8 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import * as dotenv from 'dotenv';
 import * as q from "q";
 import * as stream from "stream";
-import * as storage from "../storage";
 import { StorageKeys } from "../storage-keys";
+import * as storage from "../storage-types";
 dotenv.config();
 
 export class CustomS3Client {

@@ -5,7 +5,7 @@ import * as express from "express";
 
 import * as dotenv from 'dotenv';
 import * as errorModule from "../error";
-import * as storageTypes from "../infrastructure/storage";
+import * as storageTypes from "../infrastructure/storage-types";
 dotenv.config();
 
 const sanitizeHtml = require("sanitize-html");

@@ -4,8 +4,8 @@
 import { Response } from "express";
 import * as api from "./api";
 import { fileUploadMiddleware } from "./file-upload-manager";
-import { AwsMongoStorage } from "./infrastructure/aws-mongodb";
-import { Storage } from "./infrastructure/storage";
+import { AwsMongoStorage } from "./infrastructure/storage-composition";
+import { Storage } from "./infrastructure/storage-types";
 import { RedisManager } from "./redis-manager";
 
 import * as bodyParser from "body-parser";

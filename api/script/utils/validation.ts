@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 import * as semver from "semver";
-import * as storageTypes from "../infrastructure/storage";
+import * as storageTypes from "../infrastructure/storage-types";
 import * as restTypes from "../types/rest-definitions";
 import { ALLOWED_KEY_CHARACTERS_TEST } from "./security";
 

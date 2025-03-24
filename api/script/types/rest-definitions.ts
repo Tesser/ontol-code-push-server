@@ -58,6 +58,13 @@ export interface DownloadReport {
 
 /**
  * 패키지 정보 인터페이스 (res, req)
+ * @appVersion 앱 버전
+ * @description 패키지 설명 (릴리즈 노트, 변경 사항 설명)
+ * @isDisabled 패키지 비활성화 여부
+ * @isMandatory 필수 업데이트 여부
+ * @label 패키지 라벨 (버전 식별자: v1, v2 등)
+ * @packageHash 패키지 내용의 해시 값 (무결성 확인 및 식별에 사용)
+ * @rollout 패키지 롤아웃 비율 (전체 사용자 중 이 패키지를 받을 사용자의 비율)
  */
 export interface PackageInfo {
   appVersion?: string;
@@ -147,6 +154,11 @@ export interface App {
 
 /**
  * 앱 생성 요청 인터페이스 (req)
+ * @manuallyProvisionDeployments 자동 배포 환경 생성 여부
+ * 
+ * `false` 인 경우 기본 배포 환경인 "Production"과 "Staging"이 자동으로 생성됩니다.
+ * 
+ * `true` 인 경우 사용자가 직접 배포 환경을 생성해야 합니다.
  */
 export interface AppCreationRequest extends App {
   manuallyProvisionDeployments?: boolean;
@@ -171,6 +183,8 @@ export interface BlobInfo {
 
 /**
  * 패키지 해시 패키지 정보 맵 인터페이스 (res)
+ * 
+ * 이전 버전에서 현재 버전으로의 차등 업데이트 정보를 포함합니다.
  */
 export interface PackageHashToBlobInfoMap {
   [packageHash: string]: BlobInfo;
@@ -178,6 +192,14 @@ export interface PackageHashToBlobInfoMap {
 
 /**
  * 패키지 인터페이스 (res, req)
+ * @blobUrl 패키지 콘텐츠를 다운로드할 수 있는 URL
+ * @diffPackageMap 패키지 해시를 차등 업데이트 정보에 매핑하는 객체
+ * @originalLabel 프로모션이나 롤백 시 원본 패키지의 라벨 (원본 버전 추적에 사용됩니다.)
+ * @originalDeployment 프로모션 시 원본 배포 환경 이름 (한 환경에서 다른 환경으로 승격될 때 출처 정보를 유지합니다.)
+ * @releasedBy 배포자
+ * @releaseMethod 배포 방법 (Upload, Promote, Rollback, Unknown)
+ * @size 패키지 크기
+ * @uploadTime 패키지 업로드 시간
  */
 export interface Package extends PackageInfo {
   /*generated*/ blobUrl: string;

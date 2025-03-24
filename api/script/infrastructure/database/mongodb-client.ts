@@ -5,9 +5,10 @@ import * as dotenv from 'dotenv';
 import { Collection, Db, MongoClient } from "mongodb";
 import mongoose from "mongoose";
 import * as q from "q";
-import * as storage from "../storage";
-import { AccessKey, Account, App, Deployment } from "../storage";
+import { closeMongoose, getMongooseModels, MongooseModels, setupMongoose } from "../../model";
 import { StorageKeys } from "../storage-keys";
+import * as storage from "../storage-types";
+import { AccessKey, Account, App, Deployment } from "../storage-types";
 dotenv.config();
 
 export interface MongoDBConnection {
@@ -22,6 +23,7 @@ export interface MongoDBConnection {
     accessKeyPointers: Collection;
   };
   mongoose?: typeof mongoose;
+  models?: MongooseModels;
 }
 
 export class MongoDBClient {
@@ -59,7 +61,9 @@ export class MongoDBClient {
             },
           };
           // Mongoose 연결 설정
-          return this.setupMongoose(mongoUrl).then(() => {
+          return setupMongoose(mongoUrl).then((mongooseInstance) => {
+            this._connection.mongoose = mongooseInstance;
+            this._connection.models = getMongooseModels();
             // 필요한 인덱스를 생성합니다.
             return q.all([
               this._connection.collections.accounts.createIndex({ email: 1 }, { unique: true }),
@@ -77,55 +81,6 @@ export class MongoDBClient {
           reject(error);
         });
     });
-  }
-  /**
-   * Mongoose 연결을 설정합니다.
-   * @param mongoUrl MongoDB 연결 URL
-   * @returns 설정 완료 Promise
-   */
-  private setupMongoose(mongoUrl: string): q.Promise<void> {
-    return q.Promise<void>((resolve, reject) => {
-      // Mongoose 연결 옵션 설정
-      const mongooseOptions = {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        autoIndex: true,
-      };
-
-      // Mongoose 연결 이벤트 핸들러 설정
-      mongoose.connection.on("connected", () => {
-        console.log("✅ Mongoose가 MongoDB에 연결되었습니다.");
-      });
-
-      mongoose.connection.on("error", (err) => {
-        console.error("🔴 Mongoose 연결 오류:", err);
-      });
-
-      mongoose.connection.on("disconnected", () => {
-        console.log("⚠️ Mongoose 연결이 끊어졌습니다.");
-      });
-
-      // Mongoose 연결 시도
-      mongoose
-        .connect(mongoUrl, mongooseOptions)
-        .then(() => {
-          // 연결 성공 시 Mongoose 인스턴스를 connection 객체에 저장
-          this._connection.mongoose = mongoose;
-          resolve();
-        })
-        .catch((error) => {
-          console.error("🔴 Mongoose 연결 실패:", error);
-          reject(error);
-        });
-    });
-  }
-
-  /**
-   * Mongoose 인스턴스를 반환합니다.
-   * @returns Mongoose 인스턴스
-   */
-  public getMongoose(): typeof mongoose | undefined {
-    return this._connection?.mongoose;
   }
 
   /**
@@ -369,16 +324,16 @@ export class MongoDBClient {
 
   /**
    * 배포 데이터를 추가합니다.
-   * @param addId 추가할 배포의 계정 ID
+   * @param appId 추가할 배포의 계정 ID
    * @param deployment 추가할 배포 정보
    * @returns 완료 Promise
    */
-  public addDeployment(addId: string, deployment: storage.Deployment): q.Promise<void> {
+  public addDeployment(appId: string, deployment: storage.Deployment): q.Promise<void> {
     return this._setupPromise.then(() => {
       return q.Promise<void>((resolve, reject) => {
         this._connection.collections.deployments
           .insertOne({
-            id: StorageKeys.getDeploymentId(addId, deployment.id),
+            id: StorageKeys.getDeploymentId(appId, deployment.id),
             ...deployment,
           })
           .then(() => {
@@ -734,7 +689,7 @@ export class MongoDBClient {
 
         // Mongoose 연결 종료
         if (this._connection.mongoose) {
-          closePromises.push(this._connection.mongoose.connection.close());
+          closePromises.push(closeMongoose());
         }
 
         Promise.all(closePromises)
@@ -761,5 +716,9 @@ export class MongoDBClient {
    */
   public getSetupPromise(): q.Promise<void> {
     return this._setupPromise;
+  }
+
+  public getModels(): MongooseModels {
+    return this._connection.models;
   }
 }

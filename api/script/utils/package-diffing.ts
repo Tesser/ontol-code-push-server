@@ -11,7 +11,7 @@ import * as superagent from "superagent";
 import * as yauzl from "yauzl";
 import * as yazl from "yazl";
 import * as env from "../environment";
-import * as storageTypes from "../infrastructure/storage";
+import * as storageTypes from "../infrastructure/storage-types";
 import * as hashUtils from "../utils/hash-utils";
 import * as security from "../utils/security";
 import * as diffErrorUtils from "./diff-error-handling";

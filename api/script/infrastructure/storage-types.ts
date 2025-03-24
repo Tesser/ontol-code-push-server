@@ -50,9 +50,7 @@ export interface StorageError extends error.CodePushError {
 export interface Account {
   /*generated*/ createdTime: number;
   /*const*/ email: string;
-  gitHubId?: string;
   /*generated*/ id?: string;
-  microsoftId?: string;
   /*const*/ name: string;
 }
 
@@ -91,6 +89,7 @@ export interface App {
 export interface Deployment {
   /*generated*/ createdTime: number;
   /*generated*/ id?: string;
+  appId: string;
   name: string;
   key: string;
   package?: Package;
@@ -147,6 +146,16 @@ export interface Package {
 
 /**
  * 액세스 키 정의
+ * @createdBy 액세스 키 생성자
+ * @createdTime 액세스 키 생성 시간
+ * @expires 액세스 키 만료 시간
+ * @description 과거 시스템과의 호환성을 위한 설명 필드 (레거시 필드)
+ * @friendlyName 사용자나 관리자에게 보여질 수 있는 읽기 쉬운 이름
+ * @id 키의 고유 식별자로 일반적으로 시스템에서 자동 생성됩니다.
+ * @isSession **세션 기반(session-based) 액세스 키**인지 여부
+ * 
+ * `isSession`이 `true`인 경우, 해당 키는 세션(session) 용도로만 생성된 일시적인 키라는 의미입니다. 
+ * @name 액세스 키 이름
  */
 export interface AccessKey {
   createdBy: string;

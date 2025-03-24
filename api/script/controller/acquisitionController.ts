@@ -4,7 +4,7 @@
 import * as express from "express";
 import * as semver from "semver";
 
-import * as storageTypes from "../infrastructure/storage";
+import * as storageTypes from "../infrastructure/storage-types";
 import * as redis from "../redis-manager";
 import { UpdateCheckCacheResponse, UpdateCheckRequest, UpdateCheckResponse } from "../types/rest-definitions";
 import * as acquisitionUtils from "../utils/acquisition";
