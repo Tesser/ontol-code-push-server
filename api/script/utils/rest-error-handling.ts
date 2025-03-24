@@ -3,10 +3,10 @@
 
 import * as express from "express";
 
+import * as dotenv from 'dotenv';
 import * as errorModule from "../error";
 import * as storageTypes from "../infrastructure/storage";
-import { AppInsights } from "../services/app-insights";
-import * as passportAuthentication from "../services/passport-authentication";
+dotenv.config();
 
 const sanitizeHtml = require("sanitize-html");
 
@@ -91,18 +91,22 @@ export function sendNotFoundError(res: express.Response, message?: string): void
 }
 
 export function sendNotRegisteredError(res: express.Response): void {
-  if (passportAuthentication.PassportAuthentication.isAccountRegistrationEnabled()) {
+
+  const isAccountRegistrationEnabled = process.env["ENABLE_ACCOUNT_REGISTRATION"] !== "false";
+  
+  if (isAccountRegistrationEnabled) {
     res.status(403).render("message", {
       message:
-        "Account not found.<br/>Have you registered with the CLI?<br/>If you are registered but your email address has changed, please contact us.",
+        "계정을 찾을 수 없습니다.<br/>CLI를 통해 등록하셨나요?<br/>이미 등록했지만 이메일 주소가 변경된 경우 문의해 주세요.",
     });
   } else {
     res.status(403).render("message", {
       message:
-        "Account not found.<br/>Please <a href='http://microsoft.github.io/code-push/'>sign up for the beta</a>, and we will contact you when your account has been created!</a>",
+        "계정을 찾을 수 없습니다.<br/>베타 서비스에 가입하시면 계정이 생성되었을 때 연락드리겠습니다!",
     });
   }
 }
+
 
 export function sendConflictError(res: express.Response, message?: string): void {
   message = message ? sanitizeHtml(message) : "The provided resource already exists";
@@ -138,11 +142,7 @@ export function sendUnknownError(res: express.Response, error: any, next: Functi
     console.log(error);
   }
 
-  if (AppInsights.isAppInsightsInstrumented()) {
-    next(error); // Log error with AppInsights.
-  } else {
-    res.sendStatus(500);
-  }
+  res.sendStatus(500);
 }
 
 function storageErrorHandler(res: express.Response, error: storageTypes.StorageError, next: Function): void {

@@ -142,7 +142,6 @@ function createResponseUsingStorage(
  * @returns 상태 확인 라우터
  */
 export function getHealthRouter(config: AcquisitionConfig): express.Router {
-  console.log("🟢 getHealthRouter [1]: ", config);
   const storage: storageTypes.Storage = config.storage;
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();
@@ -171,7 +170,6 @@ export function getHealthRouter(config: AcquisitionConfig): express.Router {
  * @returns 업데이트 체크 라우터
  */
 export function getAcquisitionRouter(config: AcquisitionConfig): express.Router {
-  console.log("🟢 getAcquisitionRouter [1]: ", config);
   const storage: storageTypes.Storage = config.storage;
   const redisManager: redis.RedisManager = config.redisManager;
   const router: express.Router = express.Router();

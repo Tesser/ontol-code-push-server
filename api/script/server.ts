@@ -1,8 +1,10 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import * as dotenv from 'dotenv';
 import * as express from "express";
 import * as defaultServer from "./default-server";
+dotenv.config();
 
 const https = require("https");
 const fs = require("fs");
@@ -13,7 +15,7 @@ defaultServer.start(function (err: Error, app: express.Express) {
   }
 
   const httpsEnabled: boolean = Boolean(process.env.HTTPS) || false;
-  const defaultPort: number = httpsEnabled ? 8443 : 3000;
+  const defaultPort: number = httpsEnabled ? 8443 : 3010;
 
   const port: number = Number(process.env.API_PORT) || Number(process.env.PORT) || defaultPort;
   let server: any;

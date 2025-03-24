@@ -48,7 +48,6 @@ export interface StorageError extends error.CodePushError {
  * 앱을 관리하고 배포하고 패키지를 관리하는 계정을 지정합니다.
  */
 export interface Account {
-  azureAdId?: string;
   /*generated*/ createdTime: number;
   /*const*/ email: string;
   gitHubId?: string;
