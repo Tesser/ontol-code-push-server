@@ -1097,7 +1097,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       // 배포 객체를 찾습니다.
       .then((deployment: storageTypes.Deployment): Promise<storageTypes.Package[]> => {
         // 배포에 대한 모든 패키지 릴리즈 기록을 가져옵니다.
-        return storage.getPackageHistory(accountId, appId, deployment.id);
+        return storage.getPackageHistory(accountId, appId, deployment.key);
       })
       .then((packageHistory: storageTypes.Package[]) => {
         res.send({ history: packageHistory });
@@ -1129,13 +1129,22 @@ export function getManagementRouter(config: ManagementConfig): Router {
         })
         // 특정 앱에 대한 배포 객체를 찾습니다.
         .then((deployment: storageTypes.Deployment): Promise<redis.DeploymentMetrics> => {
+          if (!deployment.package) {
+            return q.resolve({});
+          }
+          console.log('🧐 Metrics 조회: ', deployment)
           // 배포 키를 사용하여 Redis에서 배포 메트릭을 조회합니다.
           return redisManager.getMetricsWithDeploymentKey(deployment.key);
         })
         .then((metrics: redis.DeploymentMetrics) => {
+          console.log('🧐 Redis 배포 조회 완료: ', metrics)
           // Redis 데이터를 REST API 형식으로 변환하여 반환합니다.
           const deploymentMetrics: restTypes.DeploymentMetrics = converterUtils.toRestDeploymentMetrics(metrics);
-          res.send({ metrics: deploymentMetrics });
+          const metricsArray = Object.entries(deploymentMetrics).map(([label, value]) => ({
+            label,
+            ...value
+          }))
+          res.send({ metrics: metricsArray });
         })
         .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
         .done();

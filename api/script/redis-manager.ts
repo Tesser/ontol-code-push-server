@@ -107,32 +107,45 @@ export class RedisManager {
    */
   constructor() {
     if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
+      console.log('🟡 Redis 연결 시도:', {
+        host: process.env.REDIS_HOST,
+        port: process.env.REDIS_PORT
+      });
       const redisConfig = {
         host: process.env.REDIS_HOST,
         port: process.env.REDIS_PORT,
         auth_pass: process.env.REDIS_KEY,
         tls: {
-          // Note: Node defaults CA's to those trusted by Mozilla
           rejectUnauthorized: true,
         },
       };
       this._opsClient = redis.createClient(redisConfig);
       this._metricsClient = redis.createClient(redisConfig);
       this._opsClient.on("error", (err: Error) => {
-        console.error(err);
+        console.error('🟡 Redis Ops Client Error:', err);
       });
 
       this._metricsClient.on("error", (err: Error) => {
-        console.error(err);
+        console.error('🟡 Redis Metrics Client Error:', err);
       });
 
       this._promisifiedOpsClient = new PromisifiedRedisClient(this._opsClient);
       this._promisifiedMetricsClient = new PromisifiedRedisClient(this._metricsClient);
       this._setupMetricsClientPromise = this._promisifiedMetricsClient
         .select(RedisManager.METRICS_DB)
-        .then(() => this._promisifiedMetricsClient.set("health", "health"));
+        .then(() => {
+          console.log('🟡 Redis Metrics DB 선택 완료');
+          return this._promisifiedMetricsClient.set("health", "health");
+        })
+        .then(() => {
+          console.log('🟡 Redis Health 체크 완료');
+        })
+        .catch(err => {
+          console.error('🟡 Redis 초기화 중 오류:', err);
+          throw err;
+        });
     } else {
-      console.warn("No REDIS_HOST or REDIS_PORT environment variable configured.");
+      console.warn("🟡 Redis 환경 변수가 설정되지 않았습니다.");
     }
   }
 
@@ -256,13 +269,19 @@ export class RedisManager {
    * @returns `Promise<DeploymentMetrics>` 배포 키에 대한 모든 메트릭
    */
   public getMetricsWithDeploymentKey(deploymentKey: string): Promise<DeploymentMetrics> {
+    console.log('🟡 getMetricsWithDeploymentKey [1]: ', deploymentKey)
     if (!this.isEnabled) {
+      console.log('🟡 !this.isEnabled')
       return q(<DeploymentMetrics>null);
     }
 
     return this._setupMetricsClientPromise
-      .then(() => this._promisifiedMetricsClient.hgetall(Utilities.getDeploymentKeyLabelsHash(deploymentKey)))
+      .then(() => {
+        console.log('🟡 _setupMetricsClientPromise')
+        return this._promisifiedMetricsClient.hgetall(Utilities.getDeploymentKeyLabelsHash(deploymentKey))
+      })
       .then((metrics) => {
+        console.log('🟡 metrics: ', metrics)
         // Redis는 숫자 값을 문자열로 반환하므로 여기서 파싱을 처리합니다.
         if (metrics) {
           Object.keys(metrics).forEach((metricField) => {
@@ -275,7 +294,7 @@ export class RedisManager {
         return <DeploymentMetrics>metrics;
       });
   }
-
+  
   /**
    * 현재 배포 키와 라벨을 기록하고, 이전 배포 키와 라벨을 선택적으로 업데이트합니다.
    * - 앱 업데이트 정보를 기록합니다.
