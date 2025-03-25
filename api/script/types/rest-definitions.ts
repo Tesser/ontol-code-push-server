@@ -16,7 +16,7 @@ interface AccessKeyBase {
  */
 export interface AccessKey extends AccessKeyBase {
   /*generated*/ createdTime?: number;
-  expires: number;
+  expires?: number;
   /*generated*/ isSession?: boolean;
 }
 

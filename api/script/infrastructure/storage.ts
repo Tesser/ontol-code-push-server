@@ -50,9 +50,7 @@ export interface StorageError extends error.CodePushError {
 export interface Account {
   /*generated*/ createdTime: number;
   /*const*/ email: string;
-  gitHubId?: string;
   /*generated*/ id?: string;
-  microsoftId?: string;
   /*const*/ name: string;
 }
 
@@ -161,7 +159,7 @@ export interface Package {
 export interface AccessKey {
   createdBy: string;
   createdTime: number;
-  expires: number;
+  expires?: number;
   /*legacy*/ description?: string;
   friendlyName: string;
   /*generated*/ id?: string;

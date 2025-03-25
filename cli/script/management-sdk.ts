@@ -58,7 +58,7 @@ class AccountManager {
     OWNER: "Owner",
     COLLABORATOR: "Collaborator",
   };
-  public static SERVER_URL = "http://localhost:3010";
+  public static SERVER_URL = "https://code-push-server.ontol.com/";
 
   private static API_VERSION: number = 2;
 
@@ -82,6 +82,14 @@ class AccountManager {
 
   public get accessKey(): string {
     return this._accessKey;
+  }
+
+  public register(email: string, name?: string): Promise<JsonResponse> {
+    return this.post(
+      "/auth/register",
+      JSON.stringify({ email, name: name || email }),
+      /*expectResponseBody=*/ true
+    );
   }
 
   public isAuthenticated(throwIfUnauthorized?: boolean): Promise<boolean> {
