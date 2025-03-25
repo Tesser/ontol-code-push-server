@@ -437,7 +437,7 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
 
 export function execute(command: cli.ICommand) {
   connectionInfo = deserializeConnectionInfo();
-
+  
   return Q(<void>null).then(() => {
     switch (command.type) {
       // Must not be logged in

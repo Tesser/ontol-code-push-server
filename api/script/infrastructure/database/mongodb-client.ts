@@ -420,7 +420,7 @@ export class MongoDBClient {
     return this._setupPromise.then(() => {
       return q.Promise<storage.Deployment[]>((resolve, reject) => {
         this._connection.collections.deployments
-          .find({})
+          .find({ appId })
           .toArray()
           .then((deployments) => {
             deployments.forEach((deployment) => delete deployment.id);

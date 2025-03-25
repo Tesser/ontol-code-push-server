@@ -1,17 +1,20 @@
 import * as dotenv from 'dotenv';
 import { Request, Response, Router } from "express";
 import * as jwt from "jsonwebtoken";
+import { AwsMongoStorage } from '../infrastructure/aws-mongodb';
 dotenv.config();
 
 export interface AuthenticationConfig {
   jwtSecret?: string;
+  storage?: AwsMongoStorage;
 }
 
 export class Authentication {
   private _jwtSecret: string;
-
+  private _storage: AwsMongoStorage;
   constructor(config?: AuthenticationConfig) {
     this._jwtSecret = config?.jwtSecret || process.env.JWT_SECRET || "ontol-jwt-secret-key";
+    this._storage = config?.storage || new AwsMongoStorage();
   }
 
   /**
@@ -28,7 +31,7 @@ export class Authentication {
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).send("인증 토큰이 필요합니다.");
     }
-    
+
     const token = authHeader.substring(7);
     
     try {

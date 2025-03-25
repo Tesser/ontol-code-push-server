@@ -9,9 +9,11 @@ import { Storage } from "./infrastructure/storage";
 import { RedisManager } from "./redis-manager";
 
 import * as bodyParser from "body-parser";
+import * as cors from "cors";
 import * as dotenv from 'dotenv';
 import * as express from "express";
 import * as q from "q";
+
 const domain = require("express-domain-middleware");
 dotenv.config();
 
@@ -103,7 +105,13 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       app.set("views", __dirname + "/views");
       app.set("view engine", "ejs");
       app.use("/auth/images/", express.static(__dirname + "/views/images"));
-      app.use(api.headers({ origin: process.env.CORS_ORIGIN || "http://localhost:4000" }));
+      app.use(cors({
+        origin: process.env.CORS_ORIGIN || "http://localhost:5173" || "http://localhost:4000",
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        credentials: true
+      }));
+      
       app.use(api.health({ storage: storage, redisManager: redisManager }));
 
       if (process.env.DISABLE_ACQUISITION !== "true") {

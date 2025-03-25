@@ -552,13 +552,14 @@ export class AwsMongoStorage implements storage.Storage {
    * @where S3
    * @param accountId 계정 ID
    * @param appId 앱 ID
-   * @param deploymentId 배포 ID
+   * @param deploymentKey 배포 ID
    * @returns 패키지 히스토리
    */
-  public getPackageHistory(accountId: string, appId: string, deploymentId: string): q.Promise<storage.Package[]> {
-    console.log("👋🏻 AWS_MONGO getPackageHistory [1]: ", accountId, appId, deploymentId);
-    return this.getDeployment(accountId, appId, deploymentId).then(() => {
-      return this._s3Client.loadPackageHistory(deploymentId);
+  public getPackageHistory(accountId: string, appId: string, deploymentKey: string): q.Promise<storage.Package[]> {
+    console.log("👋🏻 AWS_MONGO getPackageHistory [1]: ", accountId, appId, deploymentKey);
+    return this.getDeployment(accountId, appId, deploymentKey).then((deployment) => {
+      if(!deployment.package) return [];
+      return this._s3Client.loadPackageHistory(deploymentKey);
     });
   }
 

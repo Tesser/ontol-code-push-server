@@ -39,12 +39,20 @@ export interface ManagementConfig {
   redisManager: redis.RedisManager;
 }
 
-// A template string tag function that URL encodes the substituted values
+/**
+ * 주어진 문자열과 값을 URL 인코딩하여 반환합니다.
+ * 
+ * URL에 한글이나 특수문자가 포함된 변수를 안전하게 삽입할 때 유용합니다.
+ * @param strings 템플릿 리터럴에서 변수 사이의 문자열 부분 배열
+ * @param values 템플릿 리터럴에 삽입된 변수 값 배열
+ * @returns URL 인코딩된 문자열
+ */
 function urlEncode(strings: string[], ...values: string[]): string {
   let result = "";
   for (let i = 0; i < strings.length; i++) {
     result += strings[i];
     if (i < values.length) {
+      // 변수 값들만 URL 인코딩합니다.
       result += encodeURIComponent(values[i]);
     }
   }
@@ -59,6 +67,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
   const router: Router = Router();
   const nameResolver: NameResolver = new NameResolver(config.storage);
 
+  // 계정 정보를 조회합니다.
   router.get("/account", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     storage
@@ -71,9 +80,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 모든 액세스 키 목록을 조회합니다.
   router.get("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
 
+    // 계정 ID를 사용해 해당 사용자의 모든 액세스 키를 가져옵니다.
     storage
       .getAccessKeys(accountId)
       .then((accessKeys: storageTypes.AccessKey[]): void => {
@@ -83,7 +94,8 @@ export function getManagementRouter(config: ManagementConfig): Router {
           return firstTime - secondTime;
         });
 
-        // Hide the actual key string and replace it with a message for legacy CLIs (up to 1.11.0-beta) that still try to display it
+        // 보안을 위해 실제 키 문자열을 마스킹 처리합니다.
+        // 실제 키 문자열을 숨김 처리하고 이전 버전의 CLI(1.11.0-beta 이전)에서 여전히 표시하려고 시도하는 경우 메시지로 대체합니다.
         accessKeys.forEach((accessKey: restTypes.AccessKey) => {
           accessKey.name = ACCESS_KEY_MASKING_STRING;
         });
@@ -94,6 +106,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 액세스 키를 생성합니다.
   router.post("/accessKeys", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyRequest: restTypes.AccessKeyRequest = converterUtils.accessKeyRequestFromBody(req.body);
@@ -142,20 +155,23 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 특정 액세스 키를 조회합니다.
   router.get("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accessKeyName: string = req.params.accessKeyName;
     const accountId: string = req.user.id;
 
+    // 계정 ID와 액세스 키 이름을 사용해 특정 액세스 키를 가져옵니다.
     nameResolver
       .resolveAccessKey(accountId, accessKeyName)
       .then((accessKey: storageTypes.AccessKey): void => {
-        delete accessKey.name;
+        delete accessKey.name; // 응답 반환 전 액세스 키에서 name 속성을 삭제합니다.
         res.send({ accessKey: accessKey });
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
   });
 
+  // 특정 액세스 키를 업데이트합니다.
   router.patch("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyName: string = req.params.accessKeyName;
@@ -205,6 +221,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 특정 액세스 키를 삭제합니다.
   router.delete("/accessKeys/:accessKeyName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const accessKeyName: string = req.params.accessKeyName;
@@ -221,10 +238,17 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 특정 출처(createdBy)에서 생성된 모든 세션을 삭제합니다.
+  // 로그아웃, 
+  // 특정 계정 또는 애플리케이션의 접근 권한 원격 취소, 
+  // 보안 목적으로 세션 일괄 삭제, 
+  // 개발자 도구/CLI에서 생성된 세션 토큰 초기화, 
+  // 관리자 대시보드에서 세션 삭제
   router.delete("/sessions/:createdBy", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const createdBy: string = req.params.createdBy;
 
+    // 사용자의 모든 액세스 키를 가져온 후, 세션 타입이면서 특정 출처(createdBy)에서 생성된 액세스 키만 삭제합니다.
     storage
       .getAccessKeys(accountId)
       .then((accessKeys: storageTypes.AccessKey[]) => {
@@ -248,6 +272,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 모든 애플리케이션 목록을 조회합니다.
   router.get("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     storage
@@ -269,6 +294,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 애플리케이션 관리 시스템에서 새로운 앱을 생성하고 기본 배포 환경을 설정합니다.
   router.post("/apps", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appRequest: restTypes.AppCreationRequest = converterUtils.appCreationRequestFromBody(req.body);
@@ -277,6 +303,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
     } else {
       storage
+        // 기존 앱 목록을 조회하여 중복 이름 체크
         .getApps(accountId)
         .then((apps: storageTypes.App[]): void | Promise<void> => {
           if (NameResolver.isDuplicate(apps, appRequest.name)) {
@@ -286,10 +313,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
           let storageApp: storageTypes.App = converterUtils.toStorageApp(appRequest, new Date().getTime());
 
+          // 새로운 앱을 저장소에 추가
           return storage
             .addApp(accountId, storageApp)
             .then((app: storageTypes.App): Promise<string[]> => {
               storageApp = app;
+              // 자동 배포 환경 생성 여부
               if (!appRequest.manuallyProvisionDeployments) {
                 const defaultDeployments: string[] = ["Production", "Staging"];
                 const deploymentPromises: Promise<string>[] = defaultDeployments.map((deploymentName: string) => {
@@ -297,6 +326,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
                     createdTime: new Date().getTime(),
                     name: deploymentName,
                     key: security.generateSecureKey(accountId),
+                    appId: app.id
                   };
 
                   return storage.addDeployment(accountId, storageApp.id, deployment).then(() => {
@@ -317,24 +347,30 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   });
 
+  // 특정 애플리케이션을 조회합니다.
   router.get("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
+    // 사용자의 계정 ID와 앱 이름을 사용하여 애플리케이션을 조회합니다.
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     let storageApp: storageTypes.App;
     nameResolver
       .resolveApp(accountId, appName)
+      // 해당 앱의 모든 배포 목록을 조회합니다.
       .then((app: storageTypes.App) => {
         storageApp = app;
         return storage.getDeployments(accountId, app.id);
       })
       .then((deployments: storageTypes.Deployment[]) => {
+        // 배포 이름 목록을 추출합니다.
         const deploymentNames: string[] = deployments.map((deployment) => deployment.name);
+        // 애플리케이션 정보를 REST API 형식으로 변환하여 응답합니다.
         res.send({ app: converterUtils.toRestApp(storageApp, /*displayName=*/ appName, deploymentNames) });
       })
       .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
       .done();
   });
 
+  // 특정 애플리케이션을 삭제합니다.
   router.delete("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -368,22 +404,30 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 특정 애플리케이션을 업데이트합니다.
   router.patch("/apps/:appName", (req: Request, res: Response, next: (err?: any) => void): any => {
+    // 사용자의 계정 ID와 업데이트 할 앱 이름을 가져옵니다.
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
+    // 요청 본문을 앱 객체로 변환합니다.
     const app: restTypes.App = converterUtils.appFromBody(req.body);
 
     storage
+      // 사용자의 모든 앱 목록을 가져옵니다.
       .getApps(accountId)
       .then((apps: storageTypes.App[]): void | Promise<void> => {
+        // 업데이트 할 앱을 찾습니다.
         const existingApp: storageTypes.App = NameResolver.findByName(apps, appName);
         if (!existingApp) {
           errorUtils.sendNotFoundError(res, `App "${appName}" does not exist.`);
           return;
         }
+        // 앱의 소유자 원한을 가지고 있는지 확인합니다.
         throwIfInvalidPermissions(existingApp, storageTypes.Permissions.Owner);
 
+        // 앱 이름이 변경되었는지 확인합니다.
         if ((app.name || app.name === "") && app.name !== existingApp.name) {
+          // 새로운 이름이 중복되는지 확인합니다.
           if (NameResolver.isDuplicate(apps, app.name)) {
             errorUtils.sendConflictError(res, "An app named '" + app.name + "' already exists.");
             return;
@@ -392,17 +436,22 @@ export function getManagementRouter(config: ManagementConfig): Router {
           existingApp.name = app.name;
         }
 
+        // 앱 정보가 유효한지 확인합니다.
         const validationErrors = validationUtils.validateApp(existingApp, /*isUpdate=*/ true);
         if (validationErrors.length) {
           errorUtils.sendMalformedRequestError(res, JSON.stringify(validationErrors));
         } else {
           return storage
+            // 변경된 앱 정보를 저장소에 업데이트합니다.
             .updateApp(accountId, existingApp)
             .then(() => {
+              // 앱의 모든 배포 목록을 조회합니다.
               return storage.getDeployments(accountId, existingApp.id).then((deployments: storageTypes.Deployment[]) => {
-                const deploymentNames: string[] = deployments.map((deployment: storageTypes.Deployment) => {
+                // 배포 이름 목록을 추출합니다.
+                  const deploymentNames: string[] = deployments.map((deployment: storageTypes.Deployment) => {
                   return deployment.name;
                 });
+                // 애플리케이션 정보를 REST API 형식으로 변환하여 응답합니다.
                 return converterUtils.toRestApp(existingApp, existingApp.name, deploymentNames);
               });
             })
@@ -415,11 +464,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 앱의 소유권을 현재 사용자에서 다른 사용자(이메일로 지정)에게 이전합니다.
   router.post("/apps/:appName/transfer/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     const email: string = req.params.email;
 
+    // 이메일 형식이 유효한지 확인합니다.
     if (isPrototypePollutionKey(email)) {
       return res.status(400).send("Invalid email parameter");
     }
@@ -428,6 +479,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .resolveApp(accountId, appName)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
+        // 앱의 소유권을 새 이메일 주소로 이전합니다.
         return storage.transferApp(accountId, app.id, email);
       })
       .then(() => {
@@ -437,6 +489,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 앱에 새로운 팀원(collaborator)을 추가합니다. 앱 소유자만 새 팀원을 추가할 수 있습니다.
   router.post("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -450,6 +503,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .resolveApp(accountId, appName)
       .then((app: storageTypes.App) => {
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
+        // 지정된 이메일 주소를 앱의 팀원으로 추가합니다.# localeCompare
         return storage.addCollaborator(accountId, app.id, email);
       })
       .then(() => {
@@ -459,6 +513,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 앱의 모든 팀원(collaborator)을 조회합니다.
   router.get("/apps/:appName/collaborators", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -476,6 +531,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 앱의 팀원(collaborator)을 삭제합니다.
   router.delete("/apps/:appName/collaborators/:email", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -503,7 +559,10 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 앱의 모든 배포(deployment)를 조회합니다.
   router.get("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
+    console.log('🟢 배포 목록 조회[user]: ', req.user)
+    console.log('🟢 배포 목록 조회[params]: ', req.params)
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     let appId: string;
@@ -526,6 +585,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 앱에 새로운 배포(deployment)를 생성합니다.
   router.post("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -540,7 +600,9 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
     const storageDeployment: storageTypes.Deployment = converterUtils.toStorageDeployment(restDeployment, new Date().getTime());
     nameResolver
+      // 앱 이름으로 앱 객체를 찾습니다.
       .resolveApp(accountId, appName)
+      // 해당 앱에 대한 기존 배포 목록을 가져옵니다.
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
@@ -552,9 +614,10 @@ export function getManagementRouter(config: ManagementConfig): Router {
           return;
         }
 
-        // Allow the deployment key to be specified on creation, if desired
+        // 요청에 배포 키가 포함되었으면 사용하고, 없으면 새로 생성합니다.
         storageDeployment.key = restDeployment.key || security.generateSecureKey(accountId);
 
+        // 새 배포를 저장소에 추가합니다.
         return storage.addDeployment(accountId, appId, storageDeployment).then((deploymentId: string): void => {
           restDeployment = converterUtils.toRestDeployment(storageDeployment);
           res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${restDeployment.name}`]));
@@ -565,6 +628,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 특정 배포를 조회합니다.
   router.get("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
     console.log("✅ getDeployment", req.user.id, req.params.appName, req.params.deploymentName);
     const accountId: string = req.user.id;
@@ -589,6 +653,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 특정 배포를 삭제합니다.
   router.delete("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -617,6 +682,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 배포(환경)의 정보(주로 이름)를 업데이트합니다.
   router.patch("/apps/:appName/deployments/:deploymentName", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -632,11 +698,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
     nameResolver
       .resolveApp(accountId, appName)
+      // 앱의 모든 배포 목록을 가져옵니다.
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Owner);
         return storage.getDeployments(accountId, app.id);
       })
+      // 업데이트할 배포를 찾습니다.
       .then((storageDeployments: storageTypes.Deployment[]): void | Promise<void> => {
         const storageDeployment: storageTypes.Deployment = NameResolver.findByName(storageDeployments, deploymentName);
 
@@ -645,6 +713,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           return;
         }
 
+        // 요청에 배포 이름이 포함되어 있고 기존 이름과 다르면 중복 여부를 체크한 뒤 이름을 변경합니다.
         if ((restDeployment.name || restDeployment.name === "") && restDeployment.name !== storageDeployment.name) {
           if (NameResolver.isDuplicate(storageDeployments, restDeployment.name)) {
             errorUtils.sendConflictError(res, "A deployment named '" + restDeployment.name + "' already exists.");
@@ -662,6 +731,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 기존 릴리즈의 메타데이터(설명, 필수 업데이트 여부, 롤아웃 비율 등)를 업데이트합니다.
   router.patch("/apps/:appName/deployments/:deploymentName/release", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -679,11 +749,13 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
     nameResolver
       .resolveApp(accountId, appName)
+      // 앱의 모든 배포 목록을 가져옵니다.
       .then((app: storageTypes.App) => {
         appId = app.id;
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return storage.getDeployments(accountId, app.id);
       })
+      // 업데이트할 배포를 찾습니다.
       .then((storageDeployments: storageTypes.Deployment[]) => {
         storageDeployment = NameResolver.findByName(storageDeployments, deploymentName);
 
@@ -691,6 +763,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           throw errorUtils.restError(errorUtils.ErrorCode.NotFound, `Deployment "${deploymentName}" does not exist.`);
         }
 
+        // 배포의 모든 릴리즈 이력을 가져옵니다.
         return storage.getPackageHistory(accountId, appId, storageDeployment.id);
       })
       .then((packageHistory: storageTypes.Package[]) => {
@@ -698,6 +771,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
           throw errorUtils.restError(errorUtils.ErrorCode.NotFound, "Deployment has no releases.");
         }
 
+        // 요청에 라벨이 포함되어 있으면 해당 라벨의 릴리즈를 찾고, 없으면 가장 최근 릴리즈를 사용합니다.
         const packageToUpdate: storageTypes.Package = info.label
           ? getPackageFromLabel(packageHistory, info.label)
           : packageHistory[packageHistory.length - 1];
@@ -706,23 +780,28 @@ export function getManagementRouter(config: ManagementConfig): Router {
           throw errorUtils.restError(errorUtils.ErrorCode.NotFound, "Release not found for given label.");
         }
 
+        // 패키지 비활성화 여부를 업데이트합니다.
         const newIsDisabled: boolean = info.isDisabled;
         if (validationUtils.isDefined(newIsDisabled) && packageToUpdate.isDisabled !== newIsDisabled) {
           packageToUpdate.isDisabled = newIsDisabled;
           updateRelease = true;
         }
 
+        // 패키지 필수 업데이트 여부를 설정합니다.
         const newIsMandatory: boolean = info.isMandatory;
         if (validationUtils.isDefined(newIsMandatory) && packageToUpdate.isMandatory !== newIsMandatory) {
           packageToUpdate.isMandatory = newIsMandatory;
           updateRelease = true;
         }
 
+        // 패키지 설명을 업데이트합니다.
         if (info.description && packageToUpdate.description !== info.description) {
           packageToUpdate.description = info.description;
           updateRelease = true;
         }
 
+        // 패키지 롤아웃 비율을 업데이트합니다.
+        // 진행중인 롤아웃만 업데이트할 수 있습니다.
         const newRolloutValue: number = info.rollout;
         if (validationUtils.isDefined(newRolloutValue)) {
           let errorMessage: string;
@@ -740,12 +819,15 @@ export function getManagementRouter(config: ManagementConfig): Router {
           updateRelease = true;
         }
 
+        // 대상 앱 버전을 업데이트 합니다.
         const newAppVersion: string = info.appVersion;
         if (newAppVersion && packageToUpdate.appVersion !== newAppVersion) {
           packageToUpdate.appVersion = newAppVersion;
           updateRelease = true;
         }
 
+        // 변경사항이 잇으면 패키지 히스토리를 업데이트합니다.
+        // 업데이트된 패키지 정보를 응답으로 보내고 캐시된 패키지를 무효화합니다.
         if (updateRelease) {
           return storage.updatePackageHistory(accountId, appId, storageDeployment.id, packageHistory).then(() => {
             res.send({ package: converterUtils.toRestPackage(packageToUpdate) });
@@ -959,6 +1041,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   );
 
+  // 특정 배포의 패키지 이력을 삭제합니다.
   router.delete(
     "/apps/:appName/deployments/:deploymentName/history",
     (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -995,6 +1078,8 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   );
 
+  // 패키지 릴리즈 이력을 Storage에서 조회합니다.
+  // 저장소 데이터를 그대로 반환합니다.
   router.get("/apps/:appName/deployments/:deploymentName/history", (req: Request, res: Response, next: (err?: any) => void): any => {
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
@@ -1005,11 +1090,14 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .resolveApp(accountId, appName)
       .then((app: storageTypes.App) => {
         appId = app.id;
+        // 사용자가 최소한 팀원의 권한을 가지는지 확인합니다.
         throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
         return nameResolver.resolveDeployment(accountId, appId, deploymentName);
       })
+      // 배포 객체를 찾습니다.
       .then((deployment: storageTypes.Deployment): Promise<storageTypes.Package[]> => {
-        return storage.getPackageHistory(accountId, appId, deployment.id);
+        // 배포에 대한 모든 패키지 릴리즈 기록을 가져옵니다.
+        return storage.getPackageHistory(accountId, appId, deployment.key);
       })
       .then((packageHistory: storageTypes.Package[]) => {
         res.send({ history: packageHistory });
@@ -1018,8 +1106,11 @@ export function getManagementRouter(config: ManagementConfig): Router {
       .done();
   });
 
+  // 배포 성능 및 사용 메트릭을 Redis에서 조회합니다.
+  // Redis 데이터를 REST API 형식으로 변환하여 반환합니다.
   router.get("/apps/:appName/deployments/:deploymentName/metrics", (req: Request, res: Response, next: (err?: any) => void): any => {
     if (!redisManager.isEnabled) {
+      // Redis가 비활성화된 경우 빈 메트릭 객체를 반환하고 종료합니다.
       res.send({ metrics: {} });
     } else {
       const accountId: string = req.user.id;
@@ -1031,21 +1122,36 @@ export function getManagementRouter(config: ManagementConfig): Router {
         .resolveApp(accountId, appName)
         .then((app: storageTypes.App) => {
           appId = app.id;
+          // 사용자가 최소한 팀원의 권한을 가지는지 확인합니다.
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
+          // 배포 객체를 찾습니다.
           return nameResolver.resolveDeployment(accountId, appId, deploymentName);
         })
+        // 특정 앱에 대한 배포 객체를 찾습니다.
         .then((deployment: storageTypes.Deployment): Promise<redis.DeploymentMetrics> => {
+          if (!deployment.package) {
+            return q.resolve({});
+          }
+          console.log('🧐 Metrics 조회: ', deployment)
+          // 배포 키를 사용하여 Redis에서 배포 메트릭을 조회합니다.
           return redisManager.getMetricsWithDeploymentKey(deployment.key);
         })
         .then((metrics: redis.DeploymentMetrics) => {
+          console.log('🧐 Redis 배포 조회 완료: ', metrics)
+          // Redis 데이터를 REST API 형식으로 변환하여 반환합니다.
           const deploymentMetrics: restTypes.DeploymentMetrics = converterUtils.toRestDeploymentMetrics(metrics);
-          res.send({ metrics: deploymentMetrics });
+          const metricsArray = Object.entries(deploymentMetrics).map(([label, value]) => ({
+            label,
+            ...value
+          }))
+          res.send({ metrics: metricsArray });
         })
         .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
         .done();
     }
   });
 
+  // 특정 배포에서 다른 배포로 패키지를 승격합니다.
   router.post(
     "/apps/:appName/deployments/:sourceDeploymentName/promote/:destDeploymentName",
     (req: Request, res: Response, next: (err?: any) => void): any => {
@@ -1069,7 +1175,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
-          // Get source and dest manifests in parallel.
+          // 소스 배포와 대상 배포의 매니페스트를 병렬로 가져옵니다.
           return q.all([
             nameResolver.resolveDeployment(accountId, appId, sourceDeploymentName),
             nameResolver.resolveDeployment(accountId, appId, destDeploymentName),
@@ -1078,6 +1184,8 @@ export function getManagementRouter(config: ManagementConfig): Router {
         .spread((sourceDeployment: storageTypes.Deployment, destinationDeployment: storageTypes.Deployment) => {
           destDeployment = destinationDeployment;
 
+          // 특정 레이블을 지정한 경우 해당 레이블을 가진 패키지를 찾습니다.
+          // 지정된 레이블이 없으면 소스 배포의 현재 패키지를 사용합니다.
           if (info.label) {
             return storage.getPackageHistory(accountId, appId, sourceDeployment.id).then((sourceHistory: storageTypes.Package[]) => {
               sourcePackage = getPackageFromLabel(sourceHistory, info.label);
@@ -1089,23 +1197,28 @@ export function getManagementRouter(config: ManagementConfig): Router {
         .then(() => {
           const destPackage: storageTypes.Package = destDeployment.package;
 
+          // 소스 배포에 패키지가 없는 경우 오류를 발생시킵니다.
           if (!sourcePackage) {
             throw errorUtils.restError(errorUtils.ErrorCode.NotFound, "Cannot promote from a deployment with no enabled releases.");
           } else if (validationUtils.isDefined(info.rollout) && !validationUtils.isValidRolloutField(info.rollout)) {
+            // 롤아웃 값이 유효하지 않은 경우 오류를 발생시킵니다.
             throw errorUtils.restError(
               errorUtils.ErrorCode.MalformedRequest,
               "Rollout value must be an integer between 1 and 100, inclusive."
             );
           } else if (destPackage && isUnfinishedRollout(destPackage.rollout) && !destPackage.isDisabled) {
+            // 대상 배포에 롤아웃이 진행중이고 비활성화되지 않은 경우 오류를 발생시킵니다.
             throw errorUtils.restError(
               errorUtils.ErrorCode.Conflict,
               "Cannot promote to an unfinished rollout release unless it is already disabled."
             );
           }
 
+          // 대상 배포에 대한 패키지 이력을 가져옵니다.
           return storage.getPackageHistory(accountId, appId, destDeployment.id);
         })
         .then((destHistory: storageTypes.Package[]) => {
+          // 소스 배포의 패키지 해시가 대상 배포의 패키지 이력에 존재하는 경우 오류를 발생시킵니다.
           if (sourcePackage.packageHash === getLastPackageHashWithSameAppVersion(destHistory, sourcePackage.appVersion)) {
             throw errorUtils.restError(
               errorUtils.ErrorCode.Conflict,
@@ -1113,6 +1226,9 @@ export function getManagementRouter(config: ManagementConfig): Router {
             );
           }
 
+          // 새로운 패키지 객체를 생성합니다.
+          // 요청에 포함된 패키지 정보로 값을 설정합니다.
+          // 프로모션 메타데이터를 추가합니다.(releaseMethod, originalLabel, originalDeployment)
           const isMandatory: boolean = validationUtils.isDefined(info.isMandatory) ? info.isMandatory : sourcePackage.isMandatory;
           const newPackage: storageTypes.Package = {
             appVersion: info.appVersion ? info.appVersion : sourcePackage.appVersion,
@@ -1130,6 +1246,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             originalDeployment: sourceDeploymentName,
           };
 
+          // 새로운 패키지를 대상 배포에 저장합니다.
           return storage
             .commitPackage(accountId, appId, destDeployment.id, newPackage)
             .then((committedPackage: storageTypes.Package): Promise<void> => {
@@ -1139,6 +1256,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
               res.status(201).send({ package: restPackage });
               return invalidateCachedPackage(destDeployment.key);
             })
+            // 차등 업데이트 정보를 생성합니다.
             .then(() => processDiff(accountId, appId, destDeployment.id, sourcePackage));
         })
         .catch((error: error.CodePushError) => errorUtils.restErrorHandler(res, error, next))
@@ -1146,8 +1264,9 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   );
 
+  // 특정 배포에서 이전 배포로 롤백합니다.
   router.post(
-    "/apps/:appName/deployments/:deploymentName/rollback/:targetRelease?",
+    "/apps/:appName/deployments/:deploymentName/rollback/:targetRelease",
     (req: Request, res: Response, next: (err?: any) => void): any => {
       const accountId: string = req.user.id;
       const appName: string = req.params.appName;
@@ -1162,12 +1281,15 @@ export function getManagementRouter(config: ManagementConfig): Router {
         .then((app: storageTypes.App) => {
           appId = app.id;
           throwIfInvalidPermissions(app, storageTypes.Permissions.Collaborator);
+          // 배포 객체를 찾습니다.
           return nameResolver.resolveDeployment(accountId, appId, deploymentName);
         })
+        // 배포에 대한 패키지 이력을 가져옵니다.
         .then((deployment: storageTypes.Deployment): Promise<storageTypes.Package[]> => {
           deploymentToRollback = deployment;
           return storage.getPackageHistory(accountId, appId, deployment.id);
         })
+        // 롤백 대상 패키지를 선택합니다.
         .then((packageHistory: storageTypes.Package[]) => {
           const sourcePackage: storageTypes.Package =
             packageHistory && packageHistory.length ? packageHistory[packageHistory.length - 1] : null;
@@ -1176,6 +1298,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             return;
           }
 
+          // 대상 릴리즈가 지정되지 않았다면 히스토리에서 두 번째 최신 패키지(이전 릴리즈)를 선택합니다.
           if (!targetRelease) {
             destinationPackage = packageHistory[packageHistory.length - 2];
 
@@ -1184,6 +1307,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
               return;
             }
           } else {
+            // 대상 릴리즈가 지정되었고 최신 릴리즈와 같은 경우 오류를 발생시킵니다.
             if (targetRelease === sourcePackage.label) {
               errorUtils.sendConflictError(
                 res,
@@ -1192,12 +1316,14 @@ export function getManagementRouter(config: ManagementConfig): Router {
               return;
             }
 
+            // 히스토리에서 해당 라벨의 패키지를 찾습니다.
             packageHistory.forEach((packageEntry: storageTypes.Package) => {
               if (packageEntry.label === targetRelease) {
                 destinationPackage = packageEntry;
               }
             });
 
+            // 대상 릴리즈를 가진 패키지를 찾지 못한 경우 오류를 발생시킵니다.
             if (!destinationPackage) {
               errorUtils.sendNotFoundError(
                 res,
@@ -1207,6 +1333,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             }
           }
 
+          // 현재 패키지와 롤백 대상 패키지의 앱 버전이 다른 경우 오류를 발생시킵니다.
           if (sourcePackage.appVersion !== destinationPackage.appVersion) {
             errorUtils.sendConflictError(
               res,
@@ -1215,6 +1342,8 @@ export function getManagementRouter(config: ManagementConfig): Router {
             return;
           }
 
+          // 새로운 패키지 객체를 생성합니다.
+          // 롤백 대상 패키지의 정보를 사용하여 값을 설정합니다.
           const newPackage: storageTypes.Package = {
             appVersion: destinationPackage.appVersion,
             blobUrl: destinationPackage.blobUrl,
@@ -1230,6 +1359,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
             originalLabel: destinationPackage.label,
           };
 
+          // 새로운 패키지를 대상 배포에 저장합니다.
           return storage.commitPackage(accountId, appId, deploymentToRollback.id, newPackage).then((): Promise<void> => {
             const restPackage: restTypes.Package = converterUtils.toRestPackage(newPackage);
             res.setHeader("Location", urlEncode([`/apps/${appName}/deployments/${deploymentName}`]));
@@ -1242,10 +1372,21 @@ export function getManagementRouter(config: ManagementConfig): Router {
     }
   );
 
+  /**
+   * 주어진 배포 키에 대한 캐시를 무효화합니다.
+   * @param deploymentKey 배포 키
+   * @returns 무효화된 캐시
+   */
   function invalidateCachedPackage(deploymentKey: string): q.Promise<void> {
     return redisManager.invalidateCache(redis.Utilities.getDeploymentKeyHash(deploymentKey));
   }
 
+  /**
+   * 주어진 앱과 필요한 권한을 확인하고, 권한이 없는 경우 오류를 발생시킵니다.
+   * @param app 앱 객체
+   * @param requiredPermission 필요한 권한
+   * @returns 권한이 있는 경우 true, 권한이 없는 경우 false
+   */
   function throwIfInvalidPermissions(app: storageTypes.App, requiredPermission: string): boolean {
     const collaboratorsMap: storageTypes.CollaboratorMap = app.collaborators;
 
@@ -1270,6 +1411,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
     return true;
   }
 
+  /**
+   * 주어진 레이블과 일치하는 패키지를 반환합니다.
+   * @param history 패키지 이력 목록
+   * @param label 레이블
+   * @returns 일치하는 패키지 또는 null
+   */
   function getPackageFromLabel(history: storageTypes.Package[], label: string): storageTypes.Package {
     if (!history) {
       return null;
@@ -1284,6 +1431,12 @@ export function getManagementRouter(config: ManagementConfig): Router {
     return null;
   }
 
+  /**
+   * 주어진 앱 버전과 일치하는 패키지의 패키지 해시를 반환합니다.
+   * @param history 패키지 이력 목록
+   * @param appVersion 앱 버전
+   * @returns 일치하는 패키지의 패키지 해시 또는 null
+   */
   function getLastPackageHashWithSameAppVersion(history: storageTypes.Package[], appVersion: string): string {
     if (!history || !history.length) {
       return null;
@@ -1308,6 +1461,14 @@ export function getManagementRouter(config: ManagementConfig): Router {
     return null;
   }
 
+  /**
+   * 패키지 차이 정보를 추가합니다.
+   * @param accountId 계정 ID
+   * @param appId 앱 ID
+   * @param deploymentId 배포 ID
+   * @param appPackage 앱 패키지
+   * @param diffPackageMap 패키지 차이 정보
+   */
   function addDiffInfoForPackage(
     accountId: string,
     appId: string,

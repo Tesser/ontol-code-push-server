@@ -58,7 +58,7 @@ class AccountManager {
     OWNER: "Owner",
     COLLABORATOR: "Collaborator",
   };
-  public static SERVER_URL = "http://localhost:3010";
+  public static SERVER_URL = "https://code-push-server.ontol.com/";
 
   private static API_VERSION: number = 2;
 
