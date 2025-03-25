@@ -5,7 +5,6 @@ import { RequestHandler, Router } from "express";
 
 import { AcquisitionConfig, getAcquisitionRouter, getHealthRouter } from "./controller/acquisitionController";
 import { getManagementRouter, ManagementConfig } from "./controller/managementController";
-import { AwsMongoStorage } from "./infrastructure/aws-mongodb";
 import { getHeadersMiddleware, HeadersConfig } from "./middleware/headers";
 import { InputSanitizer } from "./middleware/input-sanitizer";
 import { RequestTimeoutHandler } from "./middleware/request-timeout";
@@ -27,12 +26,8 @@ export function management(config: ManagementConfig): Router {
   return getManagementRouter(config);
 }
 
-export function auth(config: {
-  storage: AwsMongoStorage;
-}): any {
-  const authentication = new Authentication({
-    storage: config.storage,
-  });
+export function auth(): any {
+  const authentication = new Authentication();
   return {
     router: authentication.getRouter.bind(authentication),
     authenticate: authentication.authenticate.bind(authentication),

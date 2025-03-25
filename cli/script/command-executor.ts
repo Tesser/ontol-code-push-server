@@ -436,21 +436,16 @@ function deserializeConnectionInfo(): ILoginConnectionInfo {
 }
 
 export function execute(command: cli.ICommand) {
-  if (command.type === cli.CommandType.register) {
-    console.log("🤔 M_SDK register");
-    deleteConnectionInfoCache(false);
-    return register(<cli.IRegisterCommand>command);
-  }
-  // connectionInfo = deserializeConnectionInfo();
-
+  connectionInfo = deserializeConnectionInfo();
+  
   return Q(<void>null).then(() => {
     switch (command.type) {
       // Must not be logged in
       case cli.CommandType.login:
       case cli.CommandType.register:
-        // if (connectionInfo) {
-        //   throw new Error("You are already logged in from this machine.");
-        // }
+        if (connectionInfo) {
+          throw new Error("You are already logged in from this machine.");
+        }
         break;
 
       // It does not matter whether you are logged in or not
@@ -461,13 +456,13 @@ export function execute(command: cli.ICommand) {
       default:
         if (!!sdk) break; // Used by unit tests to skip authentication
 
-        // if (!connectionInfo) {
-        //   throw new Error(
-        //     "You are not currently logged in. Run the 'code-push-standalone login' command to authenticate with the CodePush server."
-        //   );
-        // }
+        if (!connectionInfo) {
+          throw new Error(
+            "You are not currently logged in. Run the 'code-push-standalone login' command to authenticate with the CodePush server."
+          );
+        }
 
-        // sdk = getSdk(connectionInfo.accessKey, CLI_HEADERS, connectionInfo.customServerUrl);
+        sdk = getSdk(connectionInfo.accessKey, CLI_HEADERS, connectionInfo.customServerUrl);
         break;
     }
 
@@ -1184,44 +1179,8 @@ function printTable(columnNames: string[], readData: (dataSource: any[]) => void
   log(table.toString());
 }
 
-function register(command: cli.IRegisterCommand): Q.Promise<void> {
-  return Q.Promise<void>(async (resolve, reject) => {
-    const serverUrl = command.serverUrl || AccountManager.SERVER_URL;
-    
-    // 이메일과 이름을 입력받는 프로미스들 생성
-    const emailPromise = prompt("Email: ");
-    const namePromise = prompt("Name (optional): ");
-
-    // 모든 프롬프트가 완료되면 진행
-    Q.all([emailPromise, namePromise])
-      .then(([email, name]) => {
-        // SDK 인스턴스 생성
-        const sdk = getSdk("", {}, serverUrl);
-        
-        // register 메서드 호출
-        return sdk.register(email, name);
-      })
-      .then((response) => {
-        if (response.body) {
-          const { token, accessKey } = response.body;
-          
-          // 연결 정보 저장
-          serializeConnectionInfo(accessKey, /*preserveAccessKeyOnLogout*/ false, serverUrl);
-          
-          log(`Successfully registered.\nAccess key: ${accessKey}`);
-          resolve();
-        } else {
-          reject(new Error("Invalid server response"));
-        }
-      })
-      .catch((error) => {
-        if (error.statusCode === AccountManager.ERROR_CONFLICT) {
-          reject(new Error("이미 등록된 이메일입니다."));
-        } else {
-          reject(error);
-        }
-      });
-  });
+function register(command: cli.IRegisterCommand): Promise<void> {
+  return loginWithExternalAuthentication("register", command.serverUrl);
 }
 
 function promote(command: cli.IPromoteCommand): Promise<void> {

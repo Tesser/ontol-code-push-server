@@ -29,7 +29,7 @@ function bodyParserErrorHandler(err: any, req: express.Request, res: express.Res
 }
 
 export function start(done: (err?: any, server?: express.Express, storage?: Storage) => void, useJsonStorage?: boolean): void {
-  let storage: AwsMongoStorage;
+  let storage: Storage;
 
   q<void>(null)
     .then(async () => {
@@ -37,7 +37,7 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
     })
     .then(() => {
       const app = express();
-      const auth = api.auth({ storage });
+      const auth = api.auth();
       const redisManager = new RedisManager();
 
       // First, to wrap all requests and catch all exceptions.

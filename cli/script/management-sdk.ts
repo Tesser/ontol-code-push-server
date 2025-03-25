@@ -84,14 +84,6 @@ class AccountManager {
     return this._accessKey;
   }
 
-  public register(email: string, name?: string): Promise<JsonResponse> {
-    return this.post(
-      "/auth/register",
-      JSON.stringify({ email, name: name || email }),
-      /*expectResponseBody=*/ true
-    );
-  }
-
   public isAuthenticated(throwIfUnauthorized?: boolean): Promise<boolean> {
     console.log("🤔 M_SDK AccountManager: ", this._serverUrl, this._accessKey);
     return Promise<any>((resolve, reject, notify) => {
