@@ -326,6 +326,7 @@ export function getManagementRouter(config: ManagementConfig): Router {
                     createdTime: new Date().getTime(),
                     name: deploymentName,
                     key: security.generateSecureKey(accountId),
+                    appId: app.id
                   };
 
                   return storage.addDeployment(accountId, storageApp.id, deployment).then(() => {

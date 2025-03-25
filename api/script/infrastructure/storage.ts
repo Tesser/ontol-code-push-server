@@ -92,6 +92,7 @@ export interface Deployment {
   name: string;
   key: string;
   package?: Package;
+  appId:string;
 }
 
 /**
