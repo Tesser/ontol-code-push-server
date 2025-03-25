@@ -560,6 +560,8 @@ export function getManagementRouter(config: ManagementConfig): Router {
 
   // 앱의 모든 배포(deployment)를 조회합니다.
   router.get("/apps/:appName/deployments", (req: Request, res: Response, next: (err?: any) => void): any => {
+    console.log('🟢 배포 목록 조회[user]: ', req.user)
+    console.log('🟢 배포 목록 조회[params]: ', req.params)
     const accountId: string = req.user.id;
     const appName: string = req.params.appName;
     let appId: string;
