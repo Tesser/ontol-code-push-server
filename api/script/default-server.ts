@@ -42,6 +42,9 @@ export function start(done: (err?: any, server?: express.Express, storage?: Stor
       const auth = api.auth();
       const redisManager = new RedisManager();
 
+      // Enable trust proxy for X-Forwarded-For header
+      app.set('trust proxy', true);
+
       // First, to wrap all requests and catch all exceptions.
       app.use(domain);
 
